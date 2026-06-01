@@ -919,3 +919,24 @@ a.accent-link:focus-visible {
 @media (max-width: 480px) {
   .topbar-stats { display: none; }
 }
+
+/* ============================================================
+   Reduced motion — honor OS-level vestibular-safety preference
+   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+  /* `0.01ms` (not `0`) keeps transitionend/animationend events firing so
+     code that listens for them — e.g. drawer mount/unmount, focus-ring
+     transitions — doesn't silently hang. !important is necessary because
+     many of the individual rules above use shorthand `transition: …` that
+     wouldn't otherwise be overridable from a media query. */
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0ms !important;
+    scroll-behavior: auto !important;
+  }
+}
