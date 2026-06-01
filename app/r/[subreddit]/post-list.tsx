@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { CATEGORY_CONFIG, CATEGORY_ORDER, type Category } from '@/lib/categories'
 import { fetchSubPosts, type ApiPost } from '@/lib/posts-client'
-import { PostCard } from '@/app/_components/components'
+import { BulkDeepScanBar, PostCard } from '@/app/_components/components'
 import type { TaggedPost } from '@/lib/scan-types'
 
 function Skeleton() {
@@ -102,6 +102,8 @@ export default function PostList({ subreddit }: { subreddit: string }) {
           })}
         </div>
       </div>
+
+      <BulkDeepScanBar sub={subreddit} />
 
       {visibleCategories.map((cat) => {
         const cfg = CATEGORY_CONFIG[cat]

@@ -929,6 +929,35 @@ a.accent-link:focus-visible {
 }
 
 /* ============================================================
+   Bulk deep-scan banner
+   ============================================================ */
+.bulkscan {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 10px 14px;
+  margin-bottom: var(--gap);
+}
+.bulkscan-status {
+  display: flex; align-items: center; gap: 8px;
+  flex: 1; min-width: 200px;
+  font-size: 12.5px; color: var(--ink-2);
+}
+.bulkscan-text { color: var(--ink-2); }
+.bulkscan-bar {
+  flex: 0 0 140px;
+  height: 6px;
+  border-radius: 99px;
+  background: var(--border);
+  overflow: hidden;
+}
+.bulkscan-bar i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: 99px;
+  transition: width .3s cubic-bezier(.2,.8,.2,1);
+}
+
+/* ============================================================
    Legacy /r/[subreddit] hero
    ============================================================ */
 .sub-hero {

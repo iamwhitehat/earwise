@@ -221,6 +221,107 @@ export function ExportButtons({
   )
 }
 
+// ─── Bulk deep-scan banner ───────────────────────────────────────────────────
+
+/**
+ * Shows either a button ("Deep-scan all eligible (N)") or a progress
+ * bar with a stop button while bulk deep scan is running. Pass `sub` to
+ * scope to a single subreddit (used by the legacy /r/[sub] view).
+ */
+export function BulkDeepScanBar({ sub }: { sub?: string }) {
+  const scan = useScanCtx()
+  const bulk = scan.bulkDeepScan
+  const isActive = bulk?.active === true
+  // Per-sub eligible count when scoped — otherwise the global count from
+  // the hook. The global count is memoised; the per-sub one is cheap.
+  const eligibleCount = sub
+    ? scan.posts.filter(
+        (p) => p.subreddit === sub && p.category !== 'other' && p.commentsScannedAt == null,
+      ).length
+    : scan.eligibleDeepScanCount
+
+  // Hide when nothing's eligible and no bulk job is on-screen.
+  if (eligibleCount === 0 && !bulk) return null
+
+  const pct = bulk && bulk.total > 0 ? Math.round((bulk.current / bulk.total) * 100) : 0
+
+  return (
+    <div className="bulkscan card fade-in">
+      {isActive ? (
+        <>
+          <div className="bulkscan-status">
+            <Spinner size={12} color="var(--ink-3)" />
+            <span className="bulkscan-text">
+              Deep-scanning&nbsp;<span className="tnum">{bulk.current}</span>
+              &nbsp;/&nbsp;<span className="tnum">{bulk.total}</span>
+            </span>
+            <span className="t-md ink-4">{pct}%</span>
+          </div>
+          <div
+            className="bulkscan-bar"
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={bulk.total}
+            aria-valuenow={bulk.current}
+            aria-label={`Deep scan progress: ${bulk.current} of ${bulk.total}`}
+          >
+            <i style={{ width: `${pct}%` }} />
+          </div>
+          <button
+            type="button"
+            className="btn btn-danger btn-sm"
+            onClick={scan.stopBulkDeepScan}
+          >
+            <Icons.stop size={13} /> Stop
+          </button>
+        </>
+      ) : bulk?.stopped ? (
+        <>
+          <div className="bulkscan-status">
+            <span className="bulkscan-text">
+              Stopped at <span className="tnum">{bulk.current}</span> of{' '}
+              <span className="tnum">{bulk.total}</span>.&nbsp;
+              {eligibleCount > 0 ? `${eligibleCount} still eligible.` : 'Done.'}
+            </span>
+          </div>
+          {eligibleCount > 0 && (
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              onClick={() => scan.deepScanAllEligible(sub)}
+            >
+              <Icons.sparkles size={13} /> Resume
+            </button>
+          )}
+        </>
+      ) : (
+        <>
+          <div className="bulkscan-status">
+            <Icons.sparkles size={14} />
+            <span className="bulkscan-text">
+              <span className="tnum">{eligibleCount}</span> post
+              {eligibleCount === 1 ? '' : 's'} eligible for deep scan
+              {sub ? <> in r/{sub}</> : null}
+            </span>
+            <span className="t-md ink-4">
+              ~{Math.ceil((eligibleCount * 4) / 60)} min · {eligibleCount * 4}s
+              estimate
+            </span>
+          </div>
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            onClick={() => scan.deepScanAllEligible(sub)}
+            disabled={eligibleCount === 0}
+          >
+            <Icons.sparkles size={13} /> Deep-scan all ({eligibleCount})
+          </button>
+        </>
+      )}
+    </div>
+  )
+}
+
 // ─── Errors ──────────────────────────────────────────────────────────────────
 
 export function ErrorsBanner({ errors }: { errors: { sub: string; error: string }[] }) {
