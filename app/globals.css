@@ -1224,6 +1224,40 @@ a.accent-link:focus-visible {
 .msg-hero { padding: 12px 14px; border: 1px solid var(--accent-soft); border-radius: var(--r); background: var(--accent-softer); }
 
 /* ============================================================
+   Guided strategist
+   ============================================================ */
+.guide-form { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+.guide-field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.guide-field-wide { grid-column: 1 / -1; }
+.guide-field span { font-size: 11.5px; font-weight: 600; color: var(--ink-3); }
+.guide-field input {
+  font: inherit; font-size: 13px;
+  background: var(--surface); color: var(--ink);
+  border: 1px solid var(--border); border-radius: var(--r-sm);
+  padding: 7px 9px; outline: none;
+  transition: border-color .12s, box-shadow .12s;
+}
+.guide-field input:focus { border-color: var(--accent-ring); box-shadow: 0 0 0 3px var(--accent-soft); }
+@media (max-width: 720px) { .guide-form { grid-template-columns: 1fr; } }
+
+.guide-block { border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); box-shadow: var(--shadow-sm); overflow: hidden; }
+.guide-block > summary {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 16px; cursor: pointer; list-style: none;
+  font-size: 13px; font-weight: 600; color: var(--ink);
+}
+.guide-block > summary::-webkit-details-marker { display: none; }
+.guide-block > summary::before { content: '▸'; color: var(--ink-4); font-size: 11px; }
+.guide-block[open] > summary::before { content: '▾'; }
+.guide-block-body { padding: 0 16px 16px; }
+.guide-p { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--ink-2); }
+.guide-ul, .guide-ol { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 7px; font-size: 13.5px; line-height: 1.5; color: var(--ink-2); }
+.guide-ol li strong, .guide-ul li strong { color: var(--ink); }
+.guide-roadmap { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--gap); }
+.guide-roadmap-h { font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--accent-text); margin-bottom: 8px; }
+@media (max-width: 720px) { .guide-roadmap { grid-template-columns: 1fr; } }
+
+/* ============================================================
    Reduced motion — honor OS-level vestibular-safety preference
    ============================================================ */
 @media (prefers-reduced-motion: reduce) {

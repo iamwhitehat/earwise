@@ -29,6 +29,7 @@ export function NavBar() {
   const onLanguage = pathname.startsWith('/language')
   const onSignals = pathname.startsWith('/signals')
   const onLeads = pathname.startsWith('/leads')
+  const onGuide = pathname.startsWith('/guide')
 
   // Identify the active watchlist sub from /r/[sub]. Case-folded compare
   // because seeded subs preserve their original case (`SaaS`) while
@@ -88,6 +89,10 @@ export function NavBar() {
       <Link href="/leads" className={`nav-item${onLeads ? ' active' : ''}`}>
         <Icons.inbox />
         Leads
+      </Link>
+      <Link href="/guide" className={`nav-item${onGuide ? ' active' : ''}`}>
+        <Icons.flag />
+        Guide
       </Link>
 
       <div className="side-label">Watchlist · {watchlist.length}</div>

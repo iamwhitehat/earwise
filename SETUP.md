@@ -311,6 +311,37 @@ create index if not exists lead_events_lead_idx on lead_events (lead_id, created
 Reads are column-tolerant: if the tables are absent the Leads page surfaces the
 migration hint rather than crashing the rest of the app.
 
+### 2b-terdecies. Migration for the Guided strategist (Phase 2)
+
+Stores the founder's business profile and each generated strategy run.
+`business_profile` is append-only (latest row wins); `strategy_runs` records
+the brief plus the model, prompt version, and a hash of the inputs so runs are
+reproducible/traceable. Run once:
+
+```sql
+create table if not exists business_profile (
+  id bigserial primary key,
+  profile jsonb not null,
+  updated_at timestamptz not null default now()
+);
+create index if not exists business_profile_updated_idx
+  on business_profile (updated_at desc);
+
+create table if not exists strategy_runs (
+  id bigserial primary key,
+  brief jsonb not null,
+  model text not null,
+  prompt_version text not null,
+  inputs_hash text not null,
+  created_at timestamptz not null default now()
+);
+create index if not exists strategy_runs_created_idx
+  on strategy_runs (created_at desc);
+```
+
+The Guide page surfaces a migration hint if these tables are absent rather than
+crashing.
+
 ### 2c. Get the credentials
 
 1. Left sidebar → **Settings** → **API**.

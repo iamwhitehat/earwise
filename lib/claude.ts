@@ -20,6 +20,7 @@ import type {
   MessagingAssets,
   MessagingAsset,
 } from './insight-types'
+import type { StrategyBrief } from './strategy'
 
 export type { Category }
 export type { InsightV2, MessagingAssets }
@@ -1055,6 +1056,118 @@ export async function synthesizeMessaging(
   if (!vocText.trim()) return null
   const input = await callStructured(model, MESSAGING_SYSTEM_PROMPT, vocText, MESSAGING_TOOL, 3000)
   return normalizeMessaging(input)
+}
+
+// ─── Guided strategist ───────────────────────────────────────────────────────
+
+const STRATEGY_SYSTEM_PROMPT = `You are a pragmatic go-to-market strategist advising a specific founder, using real market intelligence from the subreddits they watch.
+
+Produce a concrete, grounded plan:
+- positioning: one or two sentences — how they should position against the market and incumbents.
+- icp: the sharpest ideal-customer profile to start with, given their stated ICP + the demand in the data.
+- messaging: 3-5 key messages, in the customers' own language where possible.
+- distribution: 3-5 channels with a one-line reason each, biased toward the founder's existing channels/skills.
+- roadmap: concrete actions for the first 30, 60, and 90 days (3-5 bullets each).
+- nextActions: the 5 highest-leverage things to do THIS week, each with a one-line why.
+- targetOpportunities: the canonical opportunity topics (verbatim from the intelligence) this plan goes after, so the founder can find leads for them.
+
+Rules:
+- Ground every recommendation in the supplied intelligence + profile. Reference specific opportunities, tools, and momentum.
+- Respect the founder's stated stage, skills, channels, and constraints. Don't suggest paid ads to a no-budget solo founder, etc.
+- Concrete and specific. No fluff, no emojis, no markdown.`
+
+const STRATEGY_TOOL: StructuredTool = {
+  name: 'report_strategy',
+  description: "Return a grounded go-to-market plan tailored to the founder and market.",
+  input_schema: {
+    type: 'object',
+    properties: {
+      positioning: { type: 'string' },
+      icp: { type: 'string' },
+      messaging: { type: 'array', items: { type: 'string' } },
+      distribution: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: { channel: { type: 'string' }, why: { type: 'string' } },
+          required: ['channel', 'why'],
+        },
+      },
+      roadmap: {
+        type: 'object',
+        properties: {
+          thirty: { type: 'array', items: { type: 'string' } },
+          sixty: { type: 'array', items: { type: 'string' } },
+          ninety: { type: 'array', items: { type: 'string' } },
+        },
+        required: ['thirty', 'sixty', 'ninety'],
+      },
+      nextActions: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: { action: { type: 'string' }, why: { type: 'string' } },
+          required: ['action', 'why'],
+        },
+      },
+      targetOpportunities: { type: 'array', items: { type: 'string' } },
+    },
+    required: [
+      'positioning', 'icp', 'messaging', 'distribution',
+      'roadmap', 'nextActions', 'targetOpportunities',
+    ],
+  },
+}
+
+function strList(v: unknown, max: number, cap: number): string[] {
+  return (Array.isArray(v) ? v : [])
+    .filter((s): s is string => typeof s === 'string')
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((s) => s.slice(0, max))
+    .slice(0, cap)
+}
+
+function normalizeStrategy(raw: unknown): StrategyBrief | null {
+  if (typeof raw !== 'object' || raw === null) return null
+  const o = raw as Record<string, unknown>
+  const roadmap = (o.roadmap ?? {}) as Record<string, unknown>
+  const distribution = (Array.isArray(o.distribution) ? o.distribution : [])
+    .filter((x): x is Record<string, unknown> => typeof x === 'object' && x !== null)
+    .map((x) => ({ channel: str(x.channel, 120), why: str(x.why, 240) }))
+    .filter((x) => x.channel.length > 0)
+    .slice(0, 6)
+  const nextActions = (Array.isArray(o.nextActions) ? o.nextActions : [])
+    .filter((x): x is Record<string, unknown> => typeof x === 'object' && x !== null)
+    .map((x) => ({ action: str(x.action, 200), why: str(x.why, 240) }))
+    .filter((x) => x.action.length > 0)
+    .slice(0, 6)
+  const brief: StrategyBrief = {
+    positioning: str(o.positioning, 600),
+    icp: str(o.icp, 400),
+    messaging: strList(o.messaging, 240, 6),
+    distribution,
+    roadmap: {
+      thirty: strList(roadmap.thirty, 200, 6),
+      sixty: strList(roadmap.sixty, 200, 6),
+      ninety: strList(roadmap.ninety, 200, 6),
+    },
+    nextActions,
+    targetOpportunities: strList(o.targetOpportunities, 120, 8),
+  }
+  if (!brief.positioning && brief.nextActions.length === 0) return null
+  return brief
+}
+
+/** Synthesize a grounded go-to-market plan from the assembled strategist
+ *  input (profile + market intelligence). Returns null if unusable. */
+export async function synthesizeStrategy(
+  inputText: string,
+  model: string = SYNTH_MODELS[DEFAULT_SYNTH_TIER],
+): Promise<StrategyBrief | null> {
+  if (!inputText.trim()) return null
+  const input = await callStructured(model, STRATEGY_SYSTEM_PROMPT, inputText, STRATEGY_TOOL, 4000)
+  return normalizeStrategy(input)
 }
 
 // ─── Draft reply to a high-intent signal ─────────────────────────────────────
