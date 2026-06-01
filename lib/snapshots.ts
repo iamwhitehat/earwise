@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Category } from './categories'
 import { canonicalTopic } from './topics'
 import { dedupePosts } from './dedup'
+import { scoreOpportunity, median } from './scan-types'
 
 export type WeekSnapshot = {
   topic: string
@@ -60,7 +61,7 @@ export async function recomputeCurrentWeekSnapshots(
   // rows get backfilled by the topic-backfill upsert in posts/[subreddit].
   const { data, error } = await db
     .from('posts')
-    .select('topic, subreddit, category, posted_at, analyzed_at, title, author')
+    .select('topic, subreddit, category, posted_at, analyzed_at, title, author, num_comments')
     .not('topic', 'is', null)
     .or(
       `posted_at.gte.${weekStartIso},and(posted_at.is.null,analyzed_at.gte.${weekStartIso})`,
@@ -79,6 +80,7 @@ export async function recomputeCurrentWeekSnapshots(
     feature: number
     complaint: number
     subs: Set<string>
+    engagement: number[] // per-post engagement signals (present values only)
   }
   const agg = new Map<string, Agg>()
 
@@ -93,6 +95,7 @@ export async function recomputeCurrentWeekSnapshots(
       analyzed_at: row.analyzed_at as string | null,
       title: (row.title as string | null) ?? '',
       author: (row.author as string | null) ?? '',
+      num_comments: row.num_comments as number | null,
     })),
   )
 
@@ -109,11 +112,14 @@ export async function recomputeCurrentWeekSnapshots(
     if (!topic) continue
     let e = agg.get(topic)
     if (!e) {
-      e = { posts: 0, pain: 0, feature: 0, complaint: 0, subs: new Set() }
+      e = { posts: 0, pain: 0, feature: 0, complaint: 0, subs: new Set(), engagement: [] }
       agg.set(topic, e)
     }
     e.posts++
     e.subs.add(row.subreddit)
+    if (typeof row.num_comments === 'number' && row.num_comments > 0) {
+      e.engagement.push(row.num_comments)
+    }
     const cat = row.category
     if (cat === 'pain_point') e.pain++
     else if (cat === 'feature_request') e.feature++
@@ -121,9 +127,14 @@ export async function recomputeCurrentWeekSnapshots(
   }
 
   const rows = Array.from(agg.entries()).map(([topic, e]) => {
-    const total = e.posts || 1
-    const ratio = (e.pain + e.feature) / total
-    const score = Math.min(10, e.posts * 1.5 + e.subs.size * 1.5 + ratio * 3)
+    // Shared scorer — identical weighting to the live opportunity cards.
+    const { scoreRaw } = scoreOpportunity({
+      total: e.posts,
+      subredditCount: e.subs.size,
+      painCount: e.pain,
+      featureCount: e.feature,
+      engagement: median(e.engagement),
+    })
     return {
       topic,
       week_start: weekStartYmd,
@@ -132,7 +143,7 @@ export async function recomputeCurrentWeekSnapshots(
       feature_count: e.feature,
       complaint_count: e.complaint,
       subreddit_count: e.subs.size,
-      opportunity_score: Number(score.toFixed(2)),
+      opportunity_score: Number(scoreRaw.toFixed(2)),
     }
   })
 

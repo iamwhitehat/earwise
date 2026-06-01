@@ -71,34 +71,78 @@ export type Opportunity = {
   toolCount: number
   otherCount: number
   subreddits: string[]
+  engagement: number  // median per-post engagement used in the score (0 when absent)
   score: number       // 0..10, rounded to int
   scoreRaw: number    // exact (for sorting ties)
 }
 
-// Score formula — keeps the 0..10 range but log-scales the volume terms so
-// the score doesn't saturate the moment a topic crosses a handful of posts.
-// Three additive components, all clamped together at 10:
-//   volume = log10(1 + total)        × 2.5   — caps growth; 5 posts ≈ 1.95,
-//                                              50 posts ≈ 4.27, 500 ≈ 6.77
-//   spread = log2(1 + subreddits)    × 0.8   — rewards cross-sub presence
-//                                              with diminishing returns
-//   signal = (pain + feature)/total  × 3.0   — linear high-intent ratio
-// Genuinely top-tier opportunities (50+ posts across 10+ subs, mostly
-// pain/feature) approach 10. Mid-tier lands in 4..7. Tiny topics (1-2
-// posts) sit below 3. The previous formula `total*1.5 + subs*1.5 + ratio*3`
-// saturated at total≥5 and lost all ranking signal above that point.
+export type OpportunityMetrics = {
+  total: number
+  subredditCount: number
+  painCount: number
+  featureCount: number
+  /** Median per-post engagement (upvotes, else sampled comments). 0/undefined
+   *  contributes nothing — the score is unchanged until engagement data lands
+   *  (e.g. once the OAuth upvote pipeline from Prompt 0b is wired). */
+  engagement?: number
+}
+
+// Shared scoring used by both the live opportunity cards and the weekly
+// snapshot recompute (single source of truth — previously the snapshot
+// hard-coded a divergent `posts*1.5 + subs*1.5 + ratio*3`). Four additive,
+// log-scaled components clamped together at 10:
+//   volume     = log10(1 + total)        × 2.5  — 5 posts ≈ 1.95, 500 ≈ 6.77
+//   spread     = log2(1 + subreddits)    × 0.8  — cross-sub reach, diminishing
+//   signal     = (pain + feature)/total  × 3.0  — high-intent ratio
+//   engagement = log10(1 + medianEng)    × 1.0  — demand intensity; 0 when absent
+export const SCORE_WEIGHTS = { volume: 2.5, spread: 0.8, signal: 3.0, engagement: 1.0 } as const
+
+export function scoreOpportunity(m: OpportunityMetrics): { score: number; scoreRaw: number } {
+  const ratio = m.total === 0 ? 0 : (m.painCount + m.featureCount) / m.total
+  const volume = Math.log10(1 + m.total) * SCORE_WEIGHTS.volume
+  const spread = Math.log2(1 + m.subredditCount) * SCORE_WEIGHTS.spread
+  const signal = ratio * SCORE_WEIGHTS.signal
+  const eng =
+    m.engagement && m.engagement > 0
+      ? Math.log10(1 + m.engagement) * SCORE_WEIGHTS.engagement
+      : 0
+  const scoreRaw = Math.min(10, volume + spread + signal + eng)
+  return { score: Math.round(scoreRaw), scoreRaw }
+}
+
+/** Median of a numeric list (0 for an empty list). */
+export function median(values: number[]): number {
+  if (values.length === 0) return 0
+  const sorted = [...values].sort((a, b) => a - b)
+  const mid = Math.floor(sorted.length / 2)
+  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid]
+}
+
+// Per-post engagement signal. Upvotes (when the OAuth pipeline provides them)
+// outweigh sampled comment counts; returns null when neither is known so the
+// value is excluded from the median rather than dragging it toward 0.
+function postEngagement(p: TaggedPost): number | null {
+  const upvotes = (p as { upvotes?: number | null }).upvotes
+  if (typeof upvotes === 'number' && upvotes > 0) return upvotes
+  if (typeof p.commentsSampled === 'number' && p.commentsSampled > 0) return p.commentsSampled
+  return null
+}
+
 export function computeOpportunity(posts: TaggedPost[], topic: string): Opportunity {
   let painCount = 0
   let featureCount = 0
   let toolCount = 0
   let otherCount = 0
   const subs = new Set<string>()
+  const engagementValues: number[] = []
   let total = 0
   for (const p of posts) {
     // `topic` is a canonical label; match posts whose raw topic reduces to it.
     if (canonicalTopic(p.topic) !== topic) continue
     total++
     subs.add(p.subreddit)
+    const eng = postEngagement(p)
+    if (eng !== null) engagementValues.push(eng)
     switch (p.category) {
       case 'pain_point': painCount++; break
       case 'feature_request': featureCount++; break
@@ -106,11 +150,14 @@ export function computeOpportunity(posts: TaggedPost[], topic: string): Opportun
       default: otherCount++
     }
   }
-  const ratio = total === 0 ? 0 : (painCount + featureCount) / total
-  const volume = Math.log10(1 + total) * 2.5
-  const spread = Math.log2(1 + subs.size) * 0.8
-  const signal = ratio * 3
-  const scoreRaw = Math.min(10, volume + spread + signal)
+  const engagement = median(engagementValues)
+  const { score, scoreRaw } = scoreOpportunity({
+    total,
+    subredditCount: subs.size,
+    painCount,
+    featureCount,
+    engagement,
+  })
   return {
     topic,
     total,
@@ -119,7 +166,8 @@ export function computeOpportunity(posts: TaggedPost[], topic: string): Opportun
     toolCount,
     otherCount,
     subreddits: Array.from(subs).sort(),
-    score: Math.round(scoreRaw),
+    engagement,
+    score,
     scoreRaw,
   }
 }
