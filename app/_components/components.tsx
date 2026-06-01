@@ -693,16 +693,78 @@ export function AdvantageOpportunityCard({
           <div className="gauge-cap">Advantage</div>
         </div>
       </div>
-      <button
-        type="button"
-        className="adv-explain"
-        onClick={() => setOpen((o) => !o)}
-        aria-expanded={open}
-      >
-        {open ? 'Hide breakdown' : 'Explain score'}
-      </button>
+      <div className="adv-actions">
+        <button
+          type="button"
+          className="adv-explain"
+          onClick={() => setOpen((o) => !o)}
+          aria-expanded={open}
+        >
+          {open ? 'Hide breakdown' : 'Explain score'}
+        </button>
+        <PursueParkActions opp={opp} />
+      </div>
       {open && <AdvantageBreakdown opp={opp} />}
     </div>
+  )
+}
+
+// Records the founder's pursue / park decision (LEARN). The component snapshot
+// travels in the event payload so weight recalibration can learn which profile
+// of opportunity actually gets chased. Best-effort; failures stay silent.
+function PursueParkActions({ opp }: { opp: MaterializedOpportunity }) {
+  const [state, setState] = useState<'idle' | 'saving' | 'pursued' | 'parked'>('idle')
+
+  async function record(kind: 'opportunity_pursued' | 'opportunity_parked') {
+    if (state === 'saving') return
+    setState('saving')
+    const components: AdvantageComponents = {
+      demand: opp.demand,
+      monetization: opp.monetization,
+      momentum: opp.momentum,
+      whitespace: opp.whitespace,
+      fitToYou: opp.fitToYou,
+    }
+    try {
+      const res = await fetch('/api/events', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          entity: 'opportunity',
+          entityId: opp.topic,
+          kind,
+          payload: { topic: opp.topic, components },
+        }),
+      })
+      setState(res.ok ? (kind === 'opportunity_pursued' ? 'pursued' : 'parked') : 'idle')
+    } catch {
+      setState('idle')
+    }
+  }
+
+  if (state === 'pursued') return <span className="adv-outcome pursued">✓ Pursuing</span>
+  if (state === 'parked') return <span className="adv-outcome parked">Parked</span>
+  return (
+    <span className="adv-pp">
+      <button
+        type="button"
+        className="adv-pp-btn pursue"
+        disabled={state === 'saving'}
+        onClick={() => record('opportunity_pursued')}
+        title="Mark as worth pursuing — teaches the Advantage ranking"
+      >
+        Pursue
+      </button>
+      <button
+        type="button"
+        className="adv-pp-btn park"
+        disabled={state === 'saving'}
+        onClick={() => record('opportunity_parked')}
+        title="Park this one — teaches the Advantage ranking"
+      >
+        Park
+      </button>
+    </span>
   )
 }
 
@@ -725,6 +787,110 @@ function AdvantageBreakdown({ opp }: { opp: MaterializedOpportunity }) {
           </div>
         )
       })}
+    </div>
+  )
+}
+
+// ─── What's-working panel (Phase 7 / LEARN) ──────────────────────────────────
+
+type ConversionRate = {
+  key: string
+  draftsSent: number
+  replies: number
+  callsBooked: number
+  conversions: number
+  passed: number
+  rate: number
+  replyRate: number
+}
+
+type EventsSummary = {
+  funnel: { draftsSent: number; replies: number; callsBooked: number; conversions: number; passed: number }
+  byIntent: ConversionRate[]
+  byTopic: ConversionRate[]
+  opportunities: { pursued: number; parked: number }
+  recalibration: { adjusted: boolean; samples: number }
+}
+
+/**
+ * Compact "what's working" panel: lead-funnel totals and the top converting
+ * angles, fed by GET /api/events/summary. Renders nothing until there's at
+ * least one sent draft or pursue/park decision — so it stays invisible (and
+ * tolerant) until the LEARN loop has data.
+ */
+export function WhatsWorkingPanel() {
+  const [data, setData] = useState<EventsSummary | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/events/summary')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json: EventsSummary | null) => {
+        if (!cancelled && json) setData(json)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  if (!data) return null
+  const { funnel, opportunities } = data
+  const hasData =
+    funnel.draftsSent > 0 || opportunities.pursued > 0 || opportunities.parked > 0
+  if (!hasData) return null
+
+  const angles = (data.byIntent.length > 0 ? data.byIntent : data.byTopic)
+    .filter((a) => a.conversions > 0 || a.replies > 0)
+    .slice(0, 4)
+
+  return (
+    <section className="section">
+      <div className="section-head">
+        <h2>What&apos;s working</h2>
+        <span className="pill">learned from outcomes</span>
+        {data.recalibration.adjusted && (
+          <span className="hint">ranking recalibrated from {data.recalibration.samples} decisions</span>
+        )}
+      </div>
+      <div className="card" style={{ padding: 'var(--pad)' }}>
+        <div className="ww-funnel">
+          <WwStat n={funnel.draftsSent} label="sent" />
+          <WwStat n={funnel.replies} label="replies" />
+          <WwStat n={funnel.callsBooked} label="calls" />
+          <WwStat n={funnel.conversions} label="won" accent />
+          {(opportunities.pursued > 0 || opportunities.parked > 0) && (
+            <WwStat n={opportunities.pursued} label={`pursued / ${opportunities.parked} parked`} />
+          )}
+        </div>
+        {angles.length > 0 && (
+          <div className="ww-angles">
+            <div className="t-xs ink-4" style={{ marginBottom: 6 }}>Top converting angles</div>
+            <ul className="ww-list">
+              {angles.map((a) => (
+                <li key={a.key}>
+                  <span className="ww-key">{a.key}</span>
+                  <span className="ww-bar" aria-hidden="true">
+                    <i style={{ width: `${Math.round(a.rate * 100)}%` }} />
+                  </span>
+                  <span className="ww-rate tnum" title={`${a.conversions} won / ${a.draftsSent} sent`}>
+                    {a.conversions}/{a.draftsSent} · {Math.round(a.rate * 100)}%
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+    </section>
+  )
+}
+
+function WwStat({ n, label, accent }: { n: number; label: string; accent?: boolean }) {
+  return (
+    <div className="ww-stat">
+      <span className="ww-n tnum" style={accent ? { color: 'var(--score-high)' } : undefined}>{n}</span>
+      <span className="ww-lab t-xs ink-4">{label}</span>
     </div>
   )
 }

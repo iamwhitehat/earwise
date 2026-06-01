@@ -18,6 +18,7 @@ import {
   Topbar,
   TrendDetailPanel,
   VolumeCard,
+  WhatsWorkingPanel,
   useDropStaleScanTopic,
   type BuyerLanguageData,
   type CommentStats,
@@ -482,6 +483,8 @@ function DashboardView() {
             )}
           </section>
         )}
+
+        {!showFirstRunGuide && <WhatsWorkingPanel />}
 
         {commentStats && (
           <div style={{ marginBottom: 'var(--gap)' }}>

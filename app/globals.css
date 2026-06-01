@@ -1278,6 +1278,34 @@ a.accent-link:focus-visible {
 .adv-bar i { display: block; height: 100%; border-radius: 99px; background: var(--accent); transition: width .4s cubic-bezier(.2,.8,.2,1); }
 .adv-val { font-size: 11.5px; color: var(--ink-3); text-align: right; }
 
+/* Pursue / Park outcome actions on Advantage cards (Phase 7 / LEARN) */
+.adv-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 2px; }
+.adv-pp { display: inline-flex; gap: 6px; }
+.adv-pp-btn {
+  font: inherit; font-size: 11.5px; font-weight: 600; cursor: pointer;
+  padding: 3px 10px; border-radius: 99px; border: 1px solid var(--border); background: var(--surface-2); color: var(--ink-2);
+  transition: background .15s, color .15s, border-color .15s;
+}
+.adv-pp-btn:disabled { opacity: .5; cursor: default; }
+.adv-pp-btn.pursue:hover:not(:disabled) { background: var(--score-high); border-color: var(--score-high); color: #fff; }
+.adv-pp-btn.park:hover:not(:disabled) { background: var(--pain-bg); border-color: var(--pain); color: var(--pain); }
+.adv-outcome { font-size: 11.5px; font-weight: 600; }
+.adv-outcome.pursued { color: var(--score-high); }
+.adv-outcome.parked { color: var(--ink-3); }
+
+/* What's-working panel (Phase 7 / LEARN) */
+.ww-funnel { display: flex; flex-wrap: wrap; gap: 22px; align-items: flex-end; }
+.ww-stat { display: flex; flex-direction: column; gap: 1px; }
+.ww-n { font-size: 22px; font-weight: 700; color: var(--ink); line-height: 1; }
+.ww-lab { white-space: nowrap; }
+.ww-angles { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border); }
+.ww-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.ww-list li { display: grid; grid-template-columns: minmax(80px, 140px) 1fr auto; align-items: center; gap: 10px; }
+.ww-key { font-size: 12.5px; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ww-bar { height: 6px; border-radius: 99px; background: var(--border); overflow: hidden; }
+.ww-bar i { display: block; height: 100%; border-radius: 99px; background: var(--score-high); transition: width .4s cubic-bezier(.2,.8,.2,1); }
+.ww-rate { font-size: 11.5px; color: var(--ink-3); text-align: right; white-space: nowrap; }
+
 /* ============================================================
    Reduced motion — honor OS-level vestibular-safety preference
    ============================================================ */
