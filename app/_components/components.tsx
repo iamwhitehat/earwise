@@ -893,6 +893,31 @@ export function ScanBanner({
   const activeEntries = entries.filter((b) => b.stage)
   if (activeEntries.length === 0) return null
   const doneCount = activeEntries.filter((b) => b.stage?.kind === 'done').length
+
+  // Rough ETA: sum per-bucket estimates. For buckets with a current/total
+  // count we know how many posts remain to classify (~0.6s per Claude call);
+  // for buckets still in fetching/sizing we assume ~12s of work ahead. Done
+  // buckets contribute 0. This is intentionally an approximation — surfaced
+  // as a rough hint so the user has a sense whether to wait or come back.
+  let etaSec = 0
+  for (const b of activeEntries) {
+    const stage = b.stage
+    if (!stage || stage.kind === 'done' || stage.kind === 'stopped' || stage.kind === 'failed') continue
+    if (stage.kind === 'classifying' || stage.kind === 'extracting') {
+      etaSec += Math.max(0, stage.total - stage.current) * 0.6
+    } else {
+      etaSec += 12
+    }
+  }
+  const etaLabel =
+    etaSec === 0
+      ? null
+      : etaSec < 10
+        ? '<10s remaining'
+        : etaSec < 60
+          ? `~${Math.round(etaSec)}s remaining`
+          : `~${Math.round(etaSec / 60)}m remaining`
+
   return (
     <div className="card fade-in" style={{ marginBottom: 'var(--gap)', overflow: 'hidden' }}>
       <div
@@ -906,6 +931,11 @@ export function ScanBanner({
       >
         <Spinner color="var(--accent)" />
         <span style={{ fontSize: 13, fontWeight: 600 }}>Scanning watchlist…</span>
+        {etaLabel && (
+          <span className="t-md ink-4" style={{ marginLeft: 4 }}>
+            {etaLabel}
+          </span>
+        )}
         <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--ink-3)' }} className="tnum">
           {doneCount}/{activeEntries.length} done
         </span>
@@ -1046,7 +1076,10 @@ export function WatchlistEditor({
             type="text"
             value={input}
             placeholder="add a subreddit…"
-            disabled={scanning}
+            // Mid-scan edits are allowed: the in-flight scanAll iterates a
+            // snapshot of the watchlist taken at start, so additions land
+            // for the NEXT scan and removals don't disrupt the loop. The
+            // sub-init effect picks up new entries via cached-load.
             onChange={(e) => {
               setInput(e.target.value)
               if (err) setErr(null)
@@ -1063,14 +1096,17 @@ export function WatchlistEditor({
           type="button"
           className="btn btn-ghost"
           onClick={handleAdd}
-          disabled={scanning || input.trim() === ''}
+          disabled={input.trim() === ''}
+          title={scanning ? 'Will be scanned on the next run' : undefined}
         >
           <Icons.plus size={15} /> Add
         </button>
         <PostsPerScanSelector
           value={postsPerScan}
           onChange={onChangePostsPerScan}
-          disabled={scanning}
+          // Posts-per-scan takes effect on the next scan call — safe to
+          // tweak mid-flight.
+          disabled={false}
           options={postsPerScanOptions}
         />
         {scanning ? (
@@ -1099,8 +1135,8 @@ export function WatchlistEditor({
               <button
                 type="button"
                 onClick={() => onRemove(sub)}
-                disabled={scanning}
                 aria-label={`Remove r/${sub}`}
+                title={scanning ? 'Removing now drops it from future scans only' : undefined}
               >
                 <Icons.x size={11} />
               </button>
