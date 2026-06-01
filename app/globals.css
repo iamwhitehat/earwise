@@ -657,17 +657,47 @@ a { color: inherit; text-decoration: none; }
 /* ============================================================
    Keyboard focus rings (:focus-visible only — no mouse focus rings)
    ============================================================ */
-:where(.btn, .opp-card, .trend-row, .signal-card a, .signal-card button):focus {
+
+/* Reset default focus on everything we explicitly style below; the
+   :where() keeps specificity at zero so the rules stay easy to override. */
+:where(
+  .btn, .opp-card, .trend-row, .seg button,
+  .signal-card a, .signal-card button,
+  .topbar-burger, .side-close,
+  .first-run-link, .first-run-body a,
+  .empty a, .crumb, .brand
+):focus {
   outline: none;
 }
 
 /* Light workspace — accent ring on white/near-white surfaces */
 .btn:focus-visible,
 .opp-card:focus-visible,
-.trend-row:focus-visible {
+.trend-row:focus-visible,
+.topbar-burger:focus-visible,
+.seg button:focus-visible {
   outline: 2px solid var(--accent-ring);
   outline-offset: 2px;
   box-shadow: 0 0 0 4px var(--accent-soft);
+}
+
+/* Inline / accent-text links inside the light workspace get a subtler
+   text-aligned ring so they don't blow out reading flow. */
+.first-run-link:focus-visible,
+.first-run-body a:focus-visible,
+.empty a:focus-visible,
+a.accent-link:focus-visible {
+  outline: 2px solid var(--accent-ring);
+  outline-offset: 3px;
+  border-radius: 3px;
+}
+
+/* Generic fallback for any anchor in the workspace that we haven't
+   specifically themed — keeps tab-to-link discoverable everywhere. */
+.main a:focus-visible {
+  outline: 2px solid var(--accent-ring);
+  outline-offset: 2px;
+  border-radius: 3px;
 }
 
 /* Sidebar (dark surface) — brighter ring so it stays visible */
@@ -677,7 +707,9 @@ a { color: inherit; text-decoration: none; }
   outline: none;
 }
 .nav-item:focus-visible,
-.watch-row:focus-visible {
+.watch-row:focus-visible,
+.brand:focus-visible,
+.side-close:focus-visible {
   outline: 2px solid var(--accent-ring);
   outline-offset: -1px;
   background: var(--side-bg-2);
