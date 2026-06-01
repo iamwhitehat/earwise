@@ -2,9 +2,11 @@ import type { NextRequest } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
 import { materializeOpportunities } from '@/lib/advantage-materialize'
 import { normalizeWeights } from '@/lib/advantage'
+import { loadRecalibration } from '@/lib/recalibrate-db'
 
 // POST /api/opportunities/refresh — recompute + materialize Advantage Scores.
-// Body: { weights? } to tune the component weights for this project.
+// Body: { weights? } to override the component weights for this project; when
+// omitted, weights are recalibrated from realized pursue/park outcomes (LEARN).
 export async function POST(req: NextRequest) {
   let body: unknown = {}
   try {
@@ -13,7 +15,6 @@ export async function POST(req: NextRequest) {
     body = {}
   }
   const b = body as { weights?: unknown }
-  const weights = b.weights ? normalizeWeights(b.weights) : undefined
 
   let db
   try {
@@ -26,8 +27,14 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    const recal = b.weights ? null : await loadRecalibration(db)
+    const weights = b.weights ? normalizeWeights(b.weights) : recal?.weights
     const opportunities = await materializeOpportunities(db, { weights })
-    return Response.json({ count: opportunities.length, opportunities })
+    return Response.json({
+      count: opportunities.length,
+      opportunities,
+      recalibrated: recal?.adjusted ?? false,
+    })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Materialization failed'
     console.error('[opportunities/refresh] error:', err)

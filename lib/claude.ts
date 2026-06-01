@@ -1260,6 +1260,8 @@ export async function draftSignalReply(opts: {
   text: string
   topic?: string | null
   intentType?: string
+  /** Learned "what's working" guidance (which angles convert), if available. */
+  guidance?: string | null
 }): Promise<string | null> {
   const text = opts.text.trim().slice(0, 2000)
   if (!text) return null
@@ -1269,6 +1271,7 @@ export async function draftSignalReply(opts: {
     `Author: u/${opts.author || 'unknown'}\n` +
     (opts.topic ? `Topic: ${opts.topic}\n` : '') +
     (opts.intentType ? `Intent signal: ${opts.intentType}\n` : '') +
+    (opts.guidance ? `What has converted before (lean into this angle): ${opts.guidance.trim()}\n` : '') +
     `\n--- Their post/comment ---\n${text}\n--- end ---\n\n` +
     `Draft a helpful Reddit reply that addresses their actual problem. Lead with their pain, not a pitch.`
 

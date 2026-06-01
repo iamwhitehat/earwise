@@ -30,6 +30,8 @@ export type OpenerInput = {
   valueProp?: string | null
   /** Top recurring buyer-language phrases to mirror, if available. */
   phrases?: string[]
+  /** Learned "what's working" guidance (which angles convert), if available. */
+  guidance?: string | null
 }
 
 const EXCERPT_CAP = 2000
@@ -52,6 +54,7 @@ export function buildOpenerUserContent(opts: OpenerInput): string {
     (phrases.length > 0
       ? `\nRecurring phrases real buyers use (mirror this language where natural): ${phrases.join('; ')}\n`
       : '') +
+    (opts.guidance ? `\nWhat has converted before (lean into this angle): ${opts.guidance.trim()}\n` : '') +
     `\n--- Their post/comment ---\n${excerpt}\n--- end ---\n\n` +
     `Write the opening message. Lead with their problem, mirror their words, end with one soft question.`
   )

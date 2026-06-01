@@ -9,7 +9,9 @@ import { recomputeCurrentWeekSnapshots } from '@/lib/snapshots'
 import { backfillCanonicalTopics } from '@/lib/topics-db'
 import { materializeOpportunities } from '@/lib/advantage-materialize'
 import { aggregateInsights, renderAggregatedForClaude } from '@/lib/insights-aggregator'
-import { memoryDigest } from '@/lib/memory-db'
+import { memoryDigest, replaceLearnedFact } from '@/lib/memory-db'
+import { loadRecalibration, loadWhatWorkedGuidance } from '@/lib/recalibrate-db'
+import { WHATS_WORKING_PREFIX } from '@/lib/recalibrate'
 import { buildDigest } from '@/lib/digest'
 import { sendDigestEmail } from '@/lib/email'
 
@@ -84,12 +86,28 @@ export async function POST(req: NextRequest) {
     summary.snapshotsError = err instanceof Error ? err.message : 'snapshots failed'
   }
 
-  // 3. Materialize Advantage-ranked opportunities.
+  // 3. Materialize Advantage-ranked opportunities, with weights recalibrated
+  //    from realized pursue/park outcomes (LEARN). Falls back to defaults until
+  //    there are enough decisions to learn from.
   try {
-    const opps = await materializeOpportunities(db)
+    const recal = await loadRecalibration(db)
+    const opps = await materializeOpportunities(db, { weights: recal.weights })
     summary.opportunities = opps.length
+    summary.recalibrated = recal.adjusted
   } catch (err) {
     summary.opportunitiesError = err instanceof Error ? err.message : 'materialize failed'
+  }
+
+  // 3b. Accrue a private "what's working" learned fact (top converting angles)
+  //     so future synthesis + openers are personalized to what actually closes.
+  try {
+    const guidance = await loadWhatWorkedGuidance(db)
+    if (guidance) {
+      await replaceLearnedFact(db, WHATS_WORKING_PREFIX, guidance, 1.5)
+      summary.learnedWhatsWorking = true
+    }
+  } catch (err) {
+    summary.learnError = err instanceof Error ? err.message : 'learn failed'
   }
 
   // 4. Re-synthesize cross-signal insights (store a new knowledge_insights row).

@@ -9,6 +9,7 @@ import {
   LEAD_COLUMNS,
 } from '@/lib/leads-db'
 import { logEvent } from '@/lib/events-db'
+import { loadWhatWorkedGuidance } from '@/lib/recalibrate-db'
 
 const VALUEPROP_MAX = 280
 
@@ -91,6 +92,7 @@ export async function POST(req: NextRequest, ctx: RouteContext<'/api/leads/[id]/
       ? b.valueProp.trim().slice(0, VALUEPROP_MAX)
       : null
   const phrases = await topBuyerPhrases(db)
+  const guidance = await loadWhatWorkedGuidance(db)
 
   const opener = await draftOpener({
     author: lead.author,
@@ -100,6 +102,7 @@ export async function POST(req: NextRequest, ctx: RouteContext<'/api/leads/[id]/
     intentType: lead.intentType,
     valueProp,
     phrases,
+    guidance,
   })
 
   if (!opener) {

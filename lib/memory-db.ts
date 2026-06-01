@@ -87,3 +87,28 @@ export async function addLearnedFact(
     .insert({ project_id: projectId, kind: 'learned', fact: f.slice(0, 500), weight })
   if (error) console.warn('[memory] addLearnedFact failed:', error.message)
 }
+
+/**
+ * Replace a single recurring learned fact identified by a stable prefix — so a
+ * scheduled job that re-derives the same fact (e.g. "what's working") updates
+ * it in place instead of accumulating duplicates. Best-effort.
+ */
+export async function replaceLearnedFact(
+  db: SupabaseClient,
+  prefix: string,
+  fact: string,
+  weight = 1,
+  projectId: string = DEFAULT_PROJECT,
+): Promise<void> {
+  const del = await db
+    .from('business_memory')
+    .delete()
+    .eq('project_id', projectId)
+    .eq('kind', 'learned')
+    .ilike('fact', `${prefix}%`)
+  if (del.error) {
+    console.warn('[memory] replaceLearnedFact delete failed:', del.error.message)
+    return
+  }
+  await addLearnedFact(db, fact, weight, projectId)
+}
