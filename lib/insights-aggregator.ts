@@ -3,6 +3,7 @@ import type { Category } from './categories'
 import { fetchTopicSnapshots, computeDirection, type Direction } from './snapshots'
 import { canonicalTopic } from './topics'
 import { dedupePosts } from './dedup'
+import { redditPermalink, type EvidenceRef } from './evidence'
 
 const MAX_POSTS = 10_000
 const MAX_DEEP_POSTS = 2_000
@@ -22,7 +23,7 @@ export type AggregatedInsightsData = {
     count: number
     problems: Array<{ category: Category; topic: string | null }>
   }>
-  switchQuotes: string[]
+  switchQuotes: EvidenceRef[]
   // Topics whose week-over-week growth rate is increasing — strongest early
   // signals. Computed from trend_snapshots, included in the Claude prompt so
   // the synthesis can highlight them.
@@ -45,6 +46,7 @@ type DeepRow = {
   topic: string | null
   tools: string[] | null
   quotes: unknown
+  posted_at: string | null
 }
 
 type RawQuote = { text?: string; type?: string }
@@ -64,7 +66,7 @@ export async function aggregateInsights(
       .limit(MAX_POSTS),
     db
       .from('posts')
-      .select('post_id, subreddit, category, topic, tools, quotes')
+      .select('post_id, subreddit, category, topic, tools, quotes, posted_at')
       .not('comments_scanned_at', 'is', null)
       .order('analyzed_at', { ascending: false })
       .limit(MAX_DEEP_POSTS),
@@ -205,8 +207,8 @@ function computeTopTools(deep: DeepRow[]) {
     }))
 }
 
-function collectSwitchQuotes(deep: DeepRow[]) {
-  const out: string[] = []
+function collectSwitchQuotes(deep: DeepRow[]): EvidenceRef[] {
+  const out: EvidenceRef[] = []
   for (const p of deep) {
     if (!Array.isArray(p.quotes)) continue
     for (const raw of p.quotes as RawQuote[]) {
@@ -214,7 +216,14 @@ function collectSwitchQuotes(deep: DeepRow[]) {
       if (raw.type !== 'switched') continue
       if (typeof raw.text !== 'string') continue
       const text = raw.text.trim()
-      if (text.length > 0) out.push(text)
+      if (text.length === 0) continue
+      out.push({
+        quote: text,
+        url: redditPermalink(p.subreddit, p.post_id),
+        source: 'reddit',
+        subreddit: p.subreddit,
+        postedAt: p.posted_at ? new Date(p.posted_at).getTime() : null,
+      })
       if (out.length >= SWITCH_QUOTES_CAP) return out
     }
   }
@@ -257,9 +266,9 @@ export function renderAggregatedForClaude(data: AggregatedInsightsData): string 
   }
 
   if (data.switchQuotes.length > 0) {
-    lines.push('SWITCHING QUOTES (people moving between tools — direction in the text):')
+    lines.push('SWITCHING QUOTES (people moving between tools — cite the link when you use one):')
     for (const q of data.switchQuotes) {
-      lines.push(`- "${q}"`)
+      lines.push(`- "${q.quote}" (r/${q.subreddit ?? '?'}, ${q.url})`)
     }
     lines.push('')
   }
