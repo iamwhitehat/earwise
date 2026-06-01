@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { Icons, Spinner } from '../_components/icons'
 import { useScanCtx } from '../_components/scan-provider'
-import { DirectionBadge, Topbar } from '../_components/components'
+import { DirectionBadge, StalenessBanner, Topbar } from '../_components/components'
 import type { WeekSnapshot } from '@/lib/snapshots'
 
 const CHART_WEEKS = 8
@@ -108,6 +108,13 @@ export default function InsightsPage() {
       </Topbar>
 
       <div className="content scroll">
+        <StalenessBanner
+          generatedAt={snapshot?.generatedAt ?? null}
+          onRefresh={handleRefresh}
+          refreshing={refreshing}
+          label="This insight set"
+        />
+
         {loading && !snapshot && (
           <div className="card" style={{ padding: 'var(--pad)' }}>
             <div className="skel" style={{ height: 16, marginBottom: 8 }} />

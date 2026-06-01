@@ -5,6 +5,7 @@ import { Icons, Spinner } from '../_components/icons'
 import { useScanCtx } from '../_components/scan-provider'
 import {
   BuyerLanguagePanel,
+  StalenessBanner,
   Topbar,
   collectSubreddits,
   filterLangItems,
@@ -106,6 +107,13 @@ export default function BuyerLanguagePage() {
       </Topbar>
 
       <div className="content scroll">
+        <StalenessBanner
+          generatedAt={data?.generatedAt ?? null}
+          onRefresh={handleRefresh}
+          refreshing={refreshing}
+          label="This buyer-language run"
+        />
+
         {loading && !data && (
           <div className="card" style={{ padding: 'var(--pad)' }}>
             <div className="skel" style={{ height: 14, width: '40%', marginBottom: 8 }} />

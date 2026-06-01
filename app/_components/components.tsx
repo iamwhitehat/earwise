@@ -322,6 +322,75 @@ export function BulkDeepScanBar({ sub }: { sub?: string }) {
   )
 }
 
+// ─── Staleness banner (Insights / Buyer Language) ───────────────────────────
+
+/**
+ * Shows a small inline reminder when generated data is older than
+ * `thresholdDays`. Hidden when generatedAt is null (no data yet) or fresh.
+ * Pass `refreshing` so the button shows a spinner while the underlying
+ * refresh handler is in flight.
+ */
+export function StalenessBanner({
+  generatedAt,
+  onRefresh,
+  refreshing,
+  thresholdDays = 1,
+  label,
+}: {
+  generatedAt: number | null
+  onRefresh: () => void
+  refreshing: boolean
+  thresholdDays?: number
+  label: string
+}) {
+  if (generatedAt == null) return null
+  const ms = Date.now() - generatedAt
+  const days = ms / 86_400_000
+  if (days < thresholdDays) return null
+  const ageText =
+    days < 1
+      ? `${Math.round(ms / 3_600_000)}h`
+      : days < 7
+        ? `${Math.round(days)}d`
+        : `${Math.round(days / 7)}w`
+  return (
+    <div
+      className="card fade-in"
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12,
+        padding: '10px 14px',
+        marginBottom: 'var(--gap)',
+        background: 'var(--tool-bg)',
+        borderColor: 'oklch(0.85 0.08 65)',
+        fontSize: 12.5,
+        color: 'var(--ink-2)',
+      }}
+    >
+      <Icons.clock size={14} />
+      <span style={{ flex: 1 }}>
+        {label} is <span style={{ fontWeight: 600 }}>{ageText}</span> old.
+        Recent scans may not be reflected yet.
+      </span>
+      <button
+        type="button"
+        className="btn btn-ghost btn-sm"
+        onClick={onRefresh}
+        disabled={refreshing}
+      >
+        {refreshing ? (
+          <>
+            <Spinner size={11} color="var(--ink-3)" /> Refreshing…
+          </>
+        ) : (
+          <>Refresh now</>
+        )}
+      </button>
+    </div>
+  )
+}
+
 // ─── Errors ──────────────────────────────────────────────────────────────────
 
 export function ErrorsBanner({ errors }: { errors: { sub: string; error: string }[] }) {

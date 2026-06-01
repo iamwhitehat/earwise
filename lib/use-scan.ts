@@ -363,6 +363,23 @@ export function useScan(watchlist: string[], hydrated: boolean, postsPerScan: nu
     })
   }
 
+  /**
+   * After a scan completes, recompute the downstream derived datasets so
+   * Insights and Buyer Language reflect the new posts without the user
+   * having to click their respective Refresh buttons. Fire-and-forget —
+   * failures only log (they're recoverable by the explicit Refresh
+   * button on those pages, which surfaces real errors to the user).
+   */
+  function triggerPostScanRefreshes() {
+    triggerSnapshotRefresh()
+    fetch('/api/insights/refresh', { method: 'POST' }).catch((err) => {
+      console.warn('[insights] auto-refresh failed:', err)
+    })
+    fetch('/api/buyer-language/refresh', { method: 'POST' }).catch((err) => {
+      console.warn('[buyer-language] auto-refresh failed:', err)
+    })
+  }
+
   async function scanAll() {
     if (watchlist.length === 0) return
     const subs = [...watchlist]
@@ -480,7 +497,9 @@ export function useScan(watchlist: string[], hydrated: boolean, postsPerScan: nu
     if (scanControllerRef.current === controller) {
       scanControllerRef.current = null
     }
-    triggerSnapshotRefresh()
+    // Roll all downstream derived datasets forward in one go — snapshot
+    // (already happened before this batch) plus Insights + Buyer Language.
+    triggerPostScanRefreshes()
   }
 
   function stopScan() {
