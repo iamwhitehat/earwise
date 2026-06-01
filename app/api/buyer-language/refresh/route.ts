@@ -6,6 +6,7 @@ import {
   enrichContexts,
   renderMessagingInput,
 } from '@/lib/buyer-language-aggregator'
+import { memoryDigest } from '@/lib/memory-db'
 
 // POST /api/buyer-language/refresh — runs the aggregator (1-2 small queries),
 // hands sampled text to Claude for phrase + emotional extraction, INSERTs a
@@ -80,7 +81,7 @@ export async function POST(req: NextRequest) {
     tools: tools.map((t) => t.text),
     quotes: aggregated.samples.map((s) => s.text),
   })
-  const messaging = await synthesizeMessaging(vocText, model)
+  const messaging = await synthesizeMessaging(vocText, model, await memoryDigest(db))
 
   const row: Record<string, unknown> = { phrases, tools, emotional, stats: aggregated.stats }
   if (messaging) row.messaging = messaging

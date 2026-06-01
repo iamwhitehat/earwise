@@ -10,6 +10,7 @@ import {
   STRATEGY_PROMPT_VERSION,
   type BusinessProfile,
 } from '@/lib/strategy'
+import { memoryDigest } from '@/lib/memory-db'
 
 const NDJSON_HEADERS = {
   'Content-Type': 'application/x-ndjson; charset=utf-8',
@@ -113,7 +114,7 @@ export async function POST(req: NextRequest) {
     // 3. Synthesize the plan.
     sink.send({ type: 'step', key: 'plan', label: 'Writing your go-to-market plan', status: 'running' })
     const input = assembleStrategyInput(profile, intelligenceText)
-    const brief = await synthesizeStrategy(input, model)
+    const brief = await synthesizeStrategy(input, model, await memoryDigest(db))
     if (!brief) throw new Error('The model returned no plan. Try again or scan more posts first.')
     sink.send({ type: 'step', key: 'plan', label: 'Plan ready', status: 'done' })
 

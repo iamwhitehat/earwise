@@ -715,11 +715,13 @@ function normalizeInsightsV2(raw: unknown): InsightV2[] {
 export async function synthesizeInsightsV2(
   aggregatedText: string,
   model: string = SYNTH_MODELS[DEFAULT_SYNTH_TIER],
+  memoryDigest = '',
 ): Promise<InsightV2[]> {
+  const user = memoryDigest ? `${memoryDigest}\n\n${aggregatedText}` : aggregatedText
   const draftInput = await callStructured(
     model,
     INSIGHTS_V2_SYSTEM_PROMPT,
-    aggregatedText,
+    user,
     INSIGHT_V2_TOOL,
     4000,
   )
@@ -1060,9 +1062,11 @@ function normalizeMessaging(raw: unknown): MessagingAssets | null {
 export async function synthesizeMessaging(
   vocText: string,
   model: string = SYNTH_MODELS[DEFAULT_SYNTH_TIER],
+  memoryDigest = '',
 ): Promise<MessagingAssets | null> {
   if (!vocText.trim()) return null
-  const input = await callStructured(model, MESSAGING_SYSTEM_PROMPT, vocText, MESSAGING_TOOL, 3000)
+  const user = memoryDigest ? `${memoryDigest}\n\n${vocText}` : vocText
+  const input = await callStructured(model, MESSAGING_SYSTEM_PROMPT, user, MESSAGING_TOOL, 3000)
   return normalizeMessaging(input)
 }
 
@@ -1172,9 +1176,11 @@ function normalizeStrategy(raw: unknown): StrategyBrief | null {
 export async function synthesizeStrategy(
   inputText: string,
   model: string = SYNTH_MODELS[DEFAULT_SYNTH_TIER],
+  memoryDigest = '',
 ): Promise<StrategyBrief | null> {
   if (!inputText.trim()) return null
-  const input = await callStructured(model, STRATEGY_SYSTEM_PROMPT, inputText, STRATEGY_TOOL, 4000)
+  const user = memoryDigest ? `${memoryDigest}\n\n${inputText}` : inputText
+  const input = await callStructured(model, STRATEGY_SYSTEM_PROMPT, user, STRATEGY_TOOL, 4000)
   return normalizeStrategy(input)
 }
 

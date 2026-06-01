@@ -387,6 +387,46 @@ is classified with Haiku, assigned a canonical topic, and embedded when
 `EMBEDDINGS_API_KEY` is set (see §1b). The Insights / dashboard pages tolerate
 the tables being absent — cross-source confirmation just shows Reddit only.
 
+### 2b-quindecies. Migration for Business Memory + Advantage Score (Phase 4)
+
+`business_memory` holds project-scoped facts (seeded from the business profile,
+enriched over time); a compact digest is fed into every synthesis/strategy
+prompt. `opportunities` materializes the per-opportunity Advantage Score and its
+five component scores so ranking is fast. Run once:
+
+```sql
+create table if not exists business_memory (
+  id bigserial primary key,
+  project_id text not null default 'default',
+  kind text not null,
+  fact text not null,
+  weight numeric not null default 1,
+  created_at timestamptz not null default now()
+);
+create index if not exists business_memory_project_idx on business_memory (project_id);
+
+create table if not exists opportunities (
+  id bigserial primary key,
+  project_id text not null default 'default',
+  canonical_topic text not null,
+  demand numeric not null default 0,
+  monetization numeric not null default 0,
+  momentum numeric not null default 0,
+  whitespace numeric not null default 0,
+  fit_to_you numeric not null default 0,
+  advantage_score numeric not null default 0,
+  components jsonb,
+  updated_at timestamptz not null default now(),
+  unique (project_id, canonical_topic)
+);
+create index if not exists opportunities_advantage_idx
+  on opportunities (project_id, advantage_score desc);
+```
+
+Both tables are tolerated when absent: memory just isn't injected, and the
+dashboard falls back to its in-memory opportunity ranking until you
+materialize (`POST /api/opportunities/refresh`, also run after each scan).
+
 ### 2c. Get the credentials
 
 1. Left sidebar → **Settings** → **API**.

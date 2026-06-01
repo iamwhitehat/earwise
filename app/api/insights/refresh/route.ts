@@ -2,6 +2,7 @@ import type { NextRequest } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
 import { synthesizeInsightsV2, resolveSynthModel } from '@/lib/claude'
 import { aggregateInsights, renderAggregatedForClaude } from '@/lib/insights-aggregator'
+import { memoryDigest } from '@/lib/memory-db'
 
 // Bump when the synthesis prompt/schema changes, so stored runs are traceable.
 const INSIGHTS_PROMPT_VERSION = 'insights-v2'
@@ -51,7 +52,8 @@ export async function POST(req: NextRequest) {
   }
 
   const rendered = renderAggregatedForClaude(aggregated)
-  const insights = await synthesizeInsightsV2(rendered, model)
+  const digest = await memoryDigest(db)
+  const insights = await synthesizeInsightsV2(rendered, model, digest)
 
   if (insights.length === 0) {
     return Response.json(

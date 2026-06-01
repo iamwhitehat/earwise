@@ -1,6 +1,7 @@
 import type { NextRequest } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
 import { normalizeProfile, EMPTY_PROFILE } from '@/lib/strategy'
+import { seedMemoryFromProfile } from '@/lib/memory-db'
 
 const MIGRATION_HINT =
   'If a missing table is named, run the Guided strategist migration in SETUP.md (2b-terdecies).'
@@ -73,6 +74,10 @@ export async function PUT(req: NextRequest) {
       { status: 500 }
     )
   }
+
+  // Seed Business Memory from the profile (best-effort; tolerant of an
+  // unmigrated business_memory table).
+  await seedMemoryFromProfile(db, profile)
 
   return Response.json({ profile, updatedAt: new Date(data.updated_at as string).getTime() })
 }
