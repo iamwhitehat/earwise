@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useScanCtx, useWatchlistCtx } from './scan-provider'
 import { useSidebarCtx } from './sidebar-provider'
+import { ThemeToggle } from './theme-toggle'
 import { Icons, Spinner } from './icons'
 
 // Dark, vertical sidebar (replaces the old horizontal NavBar). Contains
@@ -135,6 +136,7 @@ export function NavBar() {
             <>Last scan {lastScanLabel}</>
           )}
         </div>
+        <ThemeToggle />
       </div>
     </aside>
   )

@@ -50,6 +50,10 @@
   --score-mid:  oklch(0.62 0.15 65);
   --score-low:  oklch(0.62 0.010 280);
 
+  /* — Topbar / chrome blends (defined as variables so dark mode can swap
+     them; the topbar uses backdrop-filter blur over this color). — */
+  --chrome-blur: oklch(0.985 0.002 280 / 0.82);
+
   /* — Radius / shadow — */
   --r-sm: 6px;
   --r:    9px;
@@ -61,6 +65,41 @@
 
   --pad: 18px;
   --gap: 16px;
+}
+
+/* ─── Dark theme token overrides ──────────────────────────────────────────────
+   Applied when [data-theme="dark"] is set on <html> (either by the pre-paint
+   init script or the in-app toggle). Accent + sidebar palettes stay put —
+   the sidebar was already dark and the brand accent reads the same on both
+   backgrounds. Categories shift to muted-saturated equivalents so their
+   tinted backgrounds don't glow against the dark workspace. */
+[data-theme="dark"] {
+  --bg:        oklch(0.17 0.014 280);
+  --surface:   oklch(0.21 0.016 280);
+  --surface-2: oklch(0.25 0.018 280);
+  --border:    oklch(0.32 0.018 280);
+  --border-2:  oklch(0.28 0.016 280);
+  --ink:       oklch(0.97 0.004 280);
+  --ink-2:     oklch(0.80 0.006 280);
+  --ink-3:     oklch(0.65 0.008 280);
+  --ink-4:     oklch(0.52 0.010 280);
+
+  --accent-soft:   oklch(0.32 0.06 250);
+  --accent-softer: oklch(0.26 0.04 250);
+  --accent-text:   oklch(0.78 0.15 250);
+
+  --pain-bg:    oklch(0.30 0.07 22);
+  --feature-bg: oklch(0.28 0.06 250);
+  --tool-bg:    oklch(0.30 0.08 70);
+  --other-bg:   oklch(0.27 0.008 280);
+
+  --score-low:  oklch(0.50 0.010 280);
+
+  --chrome-blur: oklch(0.17 0.014 280 / 0.82);
+
+  --shadow-sm: 0 1px 2px oklch(0 0 0 / 0.45);
+  --shadow:    0 1px 3px oklch(0 0 0 / 0.50), 0 4px 12px oklch(0 0 0 / 0.45);
+  --shadow-lg: 0 8px 30px oklch(0 0 0 / 0.55);
 }
 
 * { box-sizing: border-box; }
@@ -225,11 +264,26 @@ a { color: inherit; text-decoration: none; }
 .scan-mini svg { width: 15px; height: 15px; }
 .side-laststamp { font-size: 11px; color: var(--side-ink-3); text-align: center; margin-top: 9px; }
 
+.theme-toggle {
+  display: flex; align-items: center; justify-content: center; gap: 7px;
+  width: 100%;
+  margin-top: 12px;
+  padding: 7px 10px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--side-border);
+  background: transparent;
+  color: var(--side-ink-2);
+  font-size: 12px; font-weight: 500;
+  transition: background .12s, color .12s;
+}
+.theme-toggle:hover { background: var(--side-bg-2); color: var(--side-ink); }
+.theme-toggle svg { opacity: .85; }
+
 /* ---- Main ---- */
 .main { overflow-y: auto; overflow-x: hidden; }
 .topbar {
   position: sticky; top: 0; z-index: 5;
-  background: oklch(0.985 0.002 280 / 0.82);
+  background: var(--chrome-blur);
   backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--border);
   padding: 0 28px;
