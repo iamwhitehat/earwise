@@ -105,6 +105,43 @@ async function callClaude<T>(make: () => Promise<T>): Promise<T> {
   })
 }
 
+// ─── Structured (tool-use) output ─────────────────────────────────────────────
+// Forces schema-valid JSON by giving the model a single tool and requiring it
+// via tool_choice. The model can't return free text, so there's no brittle
+// regex JSON extraction — the tool input IS the parsed object. Callers still
+// run their defensive normalizer on the result (clamping lengths/enums).
+type StructuredTool = Anthropic.Messages.Tool
+
+export async function callStructured<T = unknown>(
+  model: string,
+  system: string,
+  user: string,
+  tool: StructuredTool,
+  maxTokens = 2000,
+): Promise<T | null> {
+  try {
+    const msg = await callClaude(() =>
+      getClient().messages.create({
+        model,
+        max_tokens: maxTokens,
+        system,
+        tools: [tool],
+        tool_choice: { type: 'tool', name: tool.name },
+        messages: [{ role: 'user', content: user }],
+      })
+    )
+    for (const block of msg.content) {
+      if (block.type === 'tool_use' && block.name === tool.name) {
+        return block.input as T
+      }
+    }
+    return null
+  } catch (err) {
+    console.error(`[claude] callStructured(${tool.name}) error:`, err)
+    return null
+  }
+}
+
 export type Confidence = 'high' | 'medium' | 'low'
 
 export type ClassificationExample = {
@@ -408,35 +445,37 @@ Pick communities where users actively discuss problems, complaints, tools they u
 
 const SUB_NAME_RE = /^[a-z0-9_]{2,21}$/i
 
+const SUGGEST_SUBS_TOOL: StructuredTool = {
+  name: 'report_subreddits',
+  description: 'Return suggested subreddit names (bare, no r/ prefix).',
+  input_schema: {
+    type: 'object',
+    properties: { subreddits: { type: 'array', items: { type: 'string' } } },
+    required: ['subreddits'],
+  },
+}
+
 export async function suggestSubreddits(niche: string): Promise<string[]> {
   const trimmed = niche.trim()
   if (!trimmed) return []
 
-  try {
-    const msg = await callClaude(() =>
-      getClient().messages.create({
-        model: MODEL_BULK,
-        max_tokens: 200,
-        system: SUGGEST_SUBS_SYSTEM_PROMPT,
-        messages: [{ role: 'user', content: `Niche: ${trimmed}` }],
-      })
-    )
-    const block = msg.content[0]
-    if (!block || block.type !== 'text') return []
-    return parseSubList(block.text)
-  } catch (err) {
-    console.error('[claude] suggestSubreddits error:', err)
-    return []
-  }
-}
+  const input = await callStructured(
+    MODEL_BULK,
+    SUGGEST_SUBS_SYSTEM_PROMPT,
+    `Niche: ${trimmed}`,
+    SUGGEST_SUBS_TOOL,
+    200,
+  )
+  const raw =
+    input && typeof input === 'object' ? (input as Record<string, unknown>).subreddits : null
+  if (!Array.isArray(raw)) return []
 
-function parseSubList(text: string): string[] {
   const seen = new Set<string>()
   const out: string[] = []
-  for (const raw of text.split(/\r?\n/)) {
-    const cleaned = raw
+  for (const r of raw) {
+    if (typeof r !== 'string') continue
+    const cleaned = r
       .trim()
-      .replace(/^[-*\d.\s)]+/, '') // strip list markers / numbering
       .replace(/^r\//i, '')
       .replace(/[^a-z0-9_].*$/i, '') // drop anything after the first invalid char
       .toLowerCase()
@@ -501,41 +540,42 @@ function normalizeKnowledgeInsights(raw: unknown): KnowledgeInsight[] {
   return out
 }
 
+const KNOWLEDGE_INSIGHTS_TOOL: StructuredTool = {
+  name: 'report_insights',
+  description: 'Return the synthesized cross-signal market insights.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      insights: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            insight: { type: 'string' },
+            evidence: { type: 'array', items: { type: 'string' } },
+            opportunity: { type: 'string' },
+            confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
+          },
+          required: ['insight', 'evidence', 'opportunity', 'confidence'],
+        },
+      },
+    },
+    required: ['insights'],
+  },
+}
+
 export async function synthesizeKnowledgeInsights(
   aggregatedText: string,
   model: string = SYNTH_MODELS[DEFAULT_SYNTH_TIER],
 ): Promise<KnowledgeInsight[]> {
-  try {
-    const msg = await callClaude(() =>
-      getClient().messages.create({
-        model,
-        max_tokens: 2000,
-        system: KNOWLEDGE_INSIGHTS_SYSTEM_PROMPT,
-        messages: [{ role: 'user', content: aggregatedText }],
-      })
-    )
-    const block = msg.content[0]
-    if (!block || block.type !== 'text') return []
-    const text = block.text.trim()
-    try {
-      return normalizeKnowledgeInsights(JSON.parse(text))
-    } catch {
-      const m = text.match(/\{[\s\S]*\}/)
-      if (m) {
-        try {
-          return normalizeKnowledgeInsights(JSON.parse(m[0]))
-        } catch {}
-      }
-      console.warn(
-        '[claude] synthesizeKnowledgeInsights: unparseable JSON:',
-        text.slice(0, 300),
-      )
-      return []
-    }
-  } catch (err) {
-    console.error('[claude] synthesizeKnowledgeInsights error:', err)
-    return []
-  }
+  const input = await callStructured(
+    model,
+    KNOWLEDGE_INSIGHTS_SYSTEM_PROMPT,
+    aggregatedText,
+    KNOWLEDGE_INSIGHTS_TOOL,
+    2000,
+  )
+  return normalizeKnowledgeInsights(input)
 }
 
 // ─── Buyer Language extraction ────────────────────────────────────────────────
@@ -607,6 +647,45 @@ function normalizeBuyerLanguageItems(raw: unknown, maxItems: number): BuyerLangu
   return out
 }
 
+const BL_CONTEXTS_SCHEMA = {
+  type: 'array',
+  items: {
+    type: 'object',
+    properties: {
+      quote: { type: 'string' },
+      post_id: { type: 'string' },
+    },
+    required: ['quote', 'post_id'],
+  },
+} as const
+
+const BUYER_LANGUAGE_TOOL: StructuredTool = {
+  name: 'report_buyer_language',
+  description: 'Return recurring buyer-language phrases and emotional words with sample contexts.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      common_phrases: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: { text: { type: 'string' }, contexts: BL_CONTEXTS_SCHEMA },
+          required: ['text', 'contexts'],
+        },
+      },
+      emotional_language: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: { text: { type: 'string' }, contexts: BL_CONTEXTS_SCHEMA },
+          required: ['text', 'contexts'],
+        },
+      },
+    },
+    required: ['common_phrases', 'emotional_language'],
+  },
+}
+
 export async function extractBuyerLanguage(
   samples: Array<{ post_id: string; text: string }>,
   model: string = SYNTH_MODELS[DEFAULT_SYNTH_TIER],
@@ -618,43 +697,14 @@ export async function extractBuyerLanguage(
     .join('\n\n')
     .slice(0, 60_000) // safety cap on prompt body
 
-  try {
-    const msg = await callClaude(() =>
-      getClient().messages.create({
-        model,
-        max_tokens: 3000,
-        system: BUYER_LANGUAGE_SYSTEM_PROMPT,
-        messages: [{ role: 'user', content: body }],
-      })
-    )
-    const block = msg.content[0]
-    if (!block || block.type !== 'text') {
-      return { commonPhrases: [], emotionalLanguage: [] }
-    }
-    const text = block.text.trim()
-    const parse = (raw: string): BuyerLanguageExtraction | null => {
-      try {
-        const parsed = JSON.parse(raw) as Record<string, unknown>
-        return {
-          commonPhrases: normalizeBuyerLanguageItems(parsed.common_phrases, 15),
-          emotionalLanguage: normalizeBuyerLanguageItems(parsed.emotional_language, 15),
-        }
-      } catch {
-        return null
-      }
-    }
-    const direct = parse(text)
-    if (direct) return direct
-    const m = text.match(/\{[\s\S]*\}/)
-    if (m) {
-      const fallback = parse(m[0])
-      if (fallback) return fallback
-    }
-    console.warn('[claude] extractBuyerLanguage: unparseable JSON:', text.slice(0, 300))
+  const input = await callStructured(model, BUYER_LANGUAGE_SYSTEM_PROMPT, body, BUYER_LANGUAGE_TOOL, 3000)
+  if (!input || typeof input !== 'object') {
     return { commonPhrases: [], emotionalLanguage: [] }
-  } catch (err) {
-    console.error('[claude] extractBuyerLanguage error:', err)
-    return { commonPhrases: [], emotionalLanguage: [] }
+  }
+  const obj = input as Record<string, unknown>
+  return {
+    commonPhrases: normalizeBuyerLanguageItems(obj.common_phrases, 15),
+    emotionalLanguage: normalizeBuyerLanguageItems(obj.emotional_language, 15),
   }
 }
 
@@ -744,6 +794,43 @@ export async function draftOpener(opts: OpenerInput): Promise<string | null> {
   }
 }
 
+const COMMENT_INSIGHTS_TOOL: StructuredTool = {
+  name: 'report_comment_insights',
+  description: 'Return tools mentioned, buying-intent quotes, and per-comment classifications.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      tools: { type: 'array', items: { type: 'string' } },
+      quotes: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            text: { type: 'string' },
+            type: { type: 'string', enum: ['wish', 'switched', 'would_pay', 'hate'] },
+          },
+          required: ['text', 'type'],
+        },
+      },
+      comment_classifications: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            index: { type: 'integer' },
+            category: {
+              type: 'string',
+              enum: ['pain_point', 'feature_request', 'tool_complaint', 'other'],
+            },
+          },
+          required: ['index', 'category'],
+        },
+      },
+    },
+    required: ['tools', 'quotes', 'comment_classifications'],
+  },
+}
+
 export async function extractCommentInsights(
   postTitle: string,
   comments: { body: string }[],
@@ -754,33 +841,13 @@ export async function extractCommentInsights(
     .join('\n\n')
   const userContent = `Post title: "${postTitle}"\n\nComments (sorted by upvotes):\n${numbered}`
 
-  try {
-    const msg = await callClaude(() =>
-      getClient().messages.create({
-        model: MODEL_BULK,
-        // Budget covers tools + quotes + ~20 classification entries.
-        max_tokens: 1200,
-        system: COMMENT_INSIGHTS_SYSTEM_PROMPT,
-        messages: [{ role: 'user', content: userContent }],
-      })
-    )
-    const block = msg.content[0]
-    if (!block || block.type !== 'text') return { tools: [], quotes: [], classifications: [] }
-    const text = block.text.trim()
-    try {
-      return normalizeInsights(JSON.parse(text))
-    } catch {
-      // Sometimes the model wraps in code fences despite the prompt. Try to
-      // pull the first {...} block.
-      const m = text.match(/\{[\s\S]*\}/)
-      if (m) {
-        try { return normalizeInsights(JSON.parse(m[0])) } catch {}
-      }
-      console.warn('[claude] extractCommentInsights: unparseable JSON:', text.slice(0, 200))
-      return { tools: [], quotes: [], classifications: [] }
-    }
-  } catch (err) {
-    console.error('[claude] extractCommentInsights error:', err)
-    return { tools: [], quotes: [], classifications: [] }
-  }
+  // Bulk deep-scan extraction — Haiku, but now via schema-enforced tool use.
+  const input = await callStructured(
+    MODEL_BULK,
+    COMMENT_INSIGHTS_SYSTEM_PROMPT,
+    userContent,
+    COMMENT_INSIGHTS_TOOL,
+    1200,
+  )
+  return normalizeInsights(input)
 }
