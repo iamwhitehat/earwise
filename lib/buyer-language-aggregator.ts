@@ -146,6 +146,45 @@ export async function aggregateBuyerLanguageSamples(
   }
 }
 
+const MESSAGING_QUOTE_POOL = 40
+
+/**
+ * Render the Voice-of-Customer block fed to the messaging synthesis: recurring
+ * phrases + emotional words + tools, plus a pool of verbatim quotes the model
+ * must draw its `sources` from (so generated copy stays grounded in real
+ * language). Returns '' when there's nothing to work with.
+ */
+export function renderMessagingInput(opts: {
+  phrases: string[]
+  emotional: string[]
+  tools: string[]
+  quotes: string[]
+}): string {
+  const quotes = opts.quotes
+    .map((q) => q.replace(/\s+/g, ' ').trim())
+    .filter((q) => q.length >= 12)
+    .slice(0, MESSAGING_QUOTE_POOL)
+  if (quotes.length === 0 && opts.phrases.length === 0) return ''
+
+  const lines: string[] = []
+  if (opts.phrases.length > 0) {
+    lines.push('RECURRING PHRASES (verbatim):')
+    for (const p of opts.phrases.slice(0, 20)) lines.push(`- "${p}"`)
+    lines.push('')
+  }
+  if (opts.emotional.length > 0) {
+    lines.push(`EMOTIONAL WORDS: ${opts.emotional.slice(0, 20).join(', ')}`)
+    lines.push('')
+  }
+  if (opts.tools.length > 0) {
+    lines.push(`TOOLS MENTIONED: ${opts.tools.slice(0, 20).join(', ')}`)
+    lines.push('')
+  }
+  lines.push('VERBATIM QUOTES (use these exact strings in every "sources" array — do not invent):')
+  for (const q of quotes) lines.push(`- "${q.slice(0, 240)}"`)
+  return lines.join('\n')
+}
+
 /**
  * Enrich a list of Claude-returned contexts with sub + category looked up
  * from the post metadata. Contexts whose post_id isn't in the map come

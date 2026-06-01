@@ -14,10 +14,15 @@ import {
   cleanOpenerText,
   type OpenerInput,
 } from './opener'
-import type { InsightV2, InsightEvidence } from './insight-types'
+import type {
+  InsightV2,
+  InsightEvidence,
+  MessagingAssets,
+  MessagingAsset,
+} from './insight-types'
 
 export type { Category }
-export type { InsightV2 }
+export type { InsightV2, MessagingAssets }
 
 const VALID: ReadonlySet<Category> = new Set([
   'pain_point',
@@ -887,6 +892,169 @@ export async function extractBuyerLanguage(
     commonPhrases: normalizeBuyerLanguageItems(obj.common_phrases, 15),
     emotionalLanguage: normalizeBuyerLanguageItems(obj.emotional_language, 15),
   }
+}
+
+// ─── Customer Voice v2: messaging layer ──────────────────────────────────────
+
+const MESSAGING_SYSTEM_PROMPT = `You are a B2B copywriter turning raw Voice-of-Customer data into ready-to-use messaging.
+
+You receive recurring phrases, emotional words, mentioned tools, and a pool of VERBATIM quotes from real users. Build messaging that mirrors how these users actually talk — reuse their exact words.
+
+Produce:
+- themes: 3-5 Voice-of-Customer themes (theme name + one-line summary), each backed by 1-3 verbatim source quotes.
+- headlines: exactly 3 landing-page headlines built from the users' language.
+- landingHero: one hero { headline, subhead }.
+- coldOpeners: exactly 3 cold-outreach opening lines that lead with the user's problem (never a pitch).
+- adAngles: exactly 3 ad / content angles.
+- objections: 2-4 likely objections, each with a short response grounded in the data.
+- switchingTriggers: the concrete moments/reasons people switch tools (short phrases).
+- willingnessToPay: one or two sentences on price sensitivity / willingness to pay, based only on the signal.
+
+Rules:
+- Every "sources" array must contain VERBATIM quotes copied from the supplied pool — never invent quotes.
+- Keep copy tight and concrete. No hype, no emojis, no markdown.
+- If the data is thin for a field, return fewer items rather than inventing.`
+
+const MSG_ASSET_SCHEMA = {
+  type: 'array',
+  items: {
+    type: 'object',
+    properties: {
+      text: { type: 'string' },
+      sources: { type: 'array', items: { type: 'string' } },
+    },
+    required: ['text', 'sources'],
+  },
+} as const
+
+const MESSAGING_TOOL: StructuredTool = {
+  name: 'report_messaging',
+  description: 'Return ready-to-use messaging assets built from verbatim Voice-of-Customer quotes.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      themes: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            theme: { type: 'string' },
+            summary: { type: 'string' },
+            sources: { type: 'array', items: { type: 'string' } },
+          },
+          required: ['theme', 'summary', 'sources'],
+        },
+      },
+      headlines: MSG_ASSET_SCHEMA,
+      landingHero: {
+        type: 'object',
+        properties: {
+          headline: { type: 'string' },
+          subhead: { type: 'string' },
+          sources: { type: 'array', items: { type: 'string' } },
+        },
+        required: ['headline', 'subhead', 'sources'],
+      },
+      coldOpeners: MSG_ASSET_SCHEMA,
+      adAngles: MSG_ASSET_SCHEMA,
+      objections: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: { objection: { type: 'string' }, response: { type: 'string' } },
+          required: ['objection', 'response'],
+        },
+      },
+      switchingTriggers: { type: 'array', items: { type: 'string' } },
+      willingnessToPay: { type: 'string' },
+    },
+    required: [
+      'themes', 'headlines', 'landingHero', 'coldOpeners',
+      'adAngles', 'objections', 'switchingTriggers', 'willingnessToPay',
+    ],
+  },
+}
+
+function normalizeAssets(raw: unknown, max: number): MessagingAsset[] {
+  if (!Array.isArray(raw)) return []
+  const out: MessagingAsset[] = []
+  for (const item of raw) {
+    if (typeof item !== 'object' || item === null) continue
+    const it = item as Record<string, unknown>
+    const text = str(it.text, 300)
+    if (!text) continue
+    const sources = (Array.isArray(it.sources) ? it.sources : [])
+      .filter((s): s is string => typeof s === 'string')
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .slice(0, 3)
+    out.push({ text, sources })
+    if (out.length >= max) break
+  }
+  return out
+}
+
+function normalizeMessaging(raw: unknown): MessagingAssets | null {
+  if (typeof raw !== 'object' || raw === null) return null
+  const o = raw as Record<string, unknown>
+
+  const themesRaw = Array.isArray(o.themes) ? o.themes : []
+  const themes = themesRaw
+    .filter((t): t is Record<string, unknown> => typeof t === 'object' && t !== null)
+    .map((t) => ({
+      theme: str(t.theme, 120),
+      summary: str(t.summary, 280),
+      sources: (Array.isArray(t.sources) ? t.sources : [])
+        .filter((s): s is string => typeof s === 'string')
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .slice(0, 3),
+    }))
+    .filter((t) => t.theme.length > 0)
+    .slice(0, 5)
+
+  const hero = (o.landingHero ?? {}) as Record<string, unknown>
+  const objectionsRaw = Array.isArray(o.objections) ? o.objections : []
+  const objections = objectionsRaw
+    .filter((x): x is Record<string, unknown> => typeof x === 'object' && x !== null)
+    .map((x) => ({ objection: str(x.objection, 200), response: str(x.response, 300) }))
+    .filter((x) => x.objection.length > 0)
+    .slice(0, 4)
+  const switchingTriggers = (Array.isArray(o.switchingTriggers) ? o.switchingTriggers : [])
+    .filter((s): s is string => typeof s === 'string')
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, 8)
+
+  return {
+    themes,
+    headlines: normalizeAssets(o.headlines, 3),
+    landingHero: {
+      headline: str(hero.headline, 160),
+      subhead: str(hero.subhead, 280),
+      sources: (Array.isArray(hero.sources) ? hero.sources : [])
+        .filter((s): s is string => typeof s === 'string')
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .slice(0, 3),
+    },
+    coldOpeners: normalizeAssets(o.coldOpeners, 3),
+    adAngles: normalizeAssets(o.adAngles, 3),
+    objections,
+    switchingTriggers,
+    willingnessToPay: str(o.willingnessToPay, 400),
+  }
+}
+
+/** Build ready-to-use messaging assets from a rendered VoC block. Returns null
+ *  when the model produced nothing usable. */
+export async function synthesizeMessaging(
+  vocText: string,
+  model: string = SYNTH_MODELS[DEFAULT_SYNTH_TIER],
+): Promise<MessagingAssets | null> {
+  if (!vocText.trim()) return null
+  const input = await callStructured(model, MESSAGING_SYSTEM_PROMPT, vocText, MESSAGING_TOOL, 3000)
+  return normalizeMessaging(input)
 }
 
 // ─── Draft reply to a high-intent signal ─────────────────────────────────────

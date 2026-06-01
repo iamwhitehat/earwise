@@ -5,13 +5,13 @@ import { Icons, Spinner } from '../_components/icons'
 import { useScanCtx } from '../_components/scan-provider'
 import {
   BuyerLanguagePanel,
+  MessagingSections,
   StalenessBanner,
   SynthModelSelect,
   Topbar,
   collectSubreddits,
   filterLangItems,
   type BuyerLanguageData,
-  type LangItem,
 } from '../_components/components'
 import { useSynthModel } from '@/lib/use-synth-model'
 import { CATEGORY_CONFIG, CATEGORY_ORDER, type Category } from '@/lib/categories'
@@ -280,6 +280,8 @@ export default function BuyerLanguagePage() {
               showHeader={false}
               renderCopyButtons
             />
+
+            {data.messaging && <MessagingSections messaging={data.messaging} />}
           </>
         )}
       </div>

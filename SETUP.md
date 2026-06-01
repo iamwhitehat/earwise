@@ -121,6 +121,20 @@ create index if not exists buyer_language_generated_at_idx
 Existing comments stay `category = NULL`; future deep scans classify each
 comment as part of the same Claude call that extracts tools/quotes.
 
+### 2b-duodecies. Migration for Customer Voice v2 messaging (Phase 2)
+
+Adds a `messaging` jsonb column on `buyer_language` to cache the generated
+messaging assets (VoC themes, headlines, landing hero, cold openers, ad
+angles, objections, switching triggers, willingness-to-pay). Run once:
+
+```sql
+alter table buyer_language add column if not exists messaging jsonb;
+```
+
+Reads and writes are tolerant: if the column is absent, the Buyer Language
+refresh still saves phrases/tools/emotional (messaging just isn't persisted)
+and the page hides the Messaging sections. Run the migration to enable them.
+
 ### 2b-nonies. Migration for Reddit post timestamps
 
 Adds a `posted_at` column on `posts` so trend snapshots bucket by the

@@ -16,6 +16,7 @@ import {
 import type { CommentQuote } from '@/lib/posts-client'
 import type { Direction, WeekSnapshot } from '@/lib/snapshots'
 import type { StarterPreset } from '@/lib/use-watchlist'
+import type { MessagingAssets, MessagingAsset } from '@/lib/insight-types'
 import { SYNTH_TIERS, SYNTH_TIER_LABEL, type SynthTier } from '@/lib/use-synth-model'
 import { canonicalTopic } from '@/lib/topics'
 import { toCsv, toMarkdown, downloadFile } from '@/lib/csv'
@@ -1426,6 +1427,7 @@ export type BuyerLanguageData = {
   phrases: LangItem[]
   tools: LangItem[]
   emotional: LangItem[]
+  messaging?: MessagingAssets | null
   stats: { postCount: number; commentCount: number }
   generatedAt: number
 }
@@ -1847,6 +1849,178 @@ function CopyAllButton({
         <>Copy all</>
       )}
     </button>
+  )
+}
+
+// ─── Messaging (Customer Voice v2) ───────────────────────────────────────────
+
+/** Tiny copy-to-clipboard icon button for a single string. */
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false)
+  async function handleCopy() {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    } catch {
+      // clipboard may be unavailable; user can select manually
+    }
+  }
+  return (
+    <button
+      type="button"
+      className="btn btn-ghost btn-sm"
+      onClick={handleCopy}
+      title="Copy to clipboard"
+      style={{ flexShrink: 0, padding: '3px 8px' }}
+    >
+      {copied ? <span style={{ color: 'var(--score-high)' }}>Copied</span> : 'Copy'}
+    </button>
+  )
+}
+
+function SourceQuotes({ sources }: { sources: string[] }) {
+  if (!sources || sources.length === 0) return null
+  return (
+    <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 3 }}>
+      {sources.map((s, i) => (
+        <span key={i} className="t-xs ink-4" style={{ lineHeight: 1.4 }}>
+          ↳ “{s}”
+        </span>
+      ))}
+    </div>
+  )
+}
+
+/** A copy-able asset line: text + Copy button + the verbatim source quotes. */
+function AssetRow({ asset }: { asset: MessagingAsset }) {
+  return (
+    <li className="msg-asset">
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+        <p style={{ flex: 1, margin: 0, fontSize: 13.5, lineHeight: 1.5, color: 'var(--ink)' }}>
+          {asset.text}
+        </p>
+        <CopyButton text={asset.text} />
+      </div>
+      <SourceQuotes sources={asset.sources} />
+    </li>
+  )
+}
+
+function MsgSection({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="section" style={{ marginBottom: 0 }}>
+      <div className="section-head">
+        <h2>{title}</h2>
+      </div>
+      <div className="card" style={{ padding: 'var(--pad)' }}>{children}</div>
+    </section>
+  )
+}
+
+export function MessagingSections({ messaging }: { messaging: MessagingAssets }) {
+  const m = messaging
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 30, marginTop: 30 }}>
+      {m.themes.length > 0 && (
+        <MsgSection title="Voice-of-Customer themes">
+          <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {m.themes.map((t, i) => (
+              <li key={i}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink)' }}>{t.theme}</div>
+                <p style={{ margin: '2px 0 0', fontSize: 13, lineHeight: 1.5, color: 'var(--ink-2)' }}>{t.summary}</p>
+                <SourceQuotes sources={t.sources} />
+              </li>
+            ))}
+          </ul>
+        </MsgSection>
+      )}
+
+      {(m.landingHero.headline || m.headlines.length > 0) && (
+        <MsgSection title="Ready copy">
+          {m.landingHero.headline && (
+            <div className="msg-hero">
+              <div className="t-xs ink-4" style={{ textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600, marginBottom: 4 }}>
+                Landing hero
+              </div>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 17, fontWeight: 700, letterSpacing: '-0.01em', color: 'var(--ink)', lineHeight: 1.25 }}>
+                    {m.landingHero.headline}
+                  </div>
+                  <div style={{ fontSize: 13.5, color: 'var(--ink-2)', marginTop: 4, lineHeight: 1.5 }}>
+                    {m.landingHero.subhead}
+                  </div>
+                </div>
+                <CopyButton text={`${m.landingHero.headline}\n${m.landingHero.subhead}`} />
+              </div>
+              <SourceQuotes sources={m.landingHero.sources} />
+            </div>
+          )}
+          {m.headlines.length > 0 && (
+            <>
+              <div className="t-xs ink-4" style={{ textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600, margin: '16px 0 6px' }}>
+                Headlines
+              </div>
+              <ul className="msg-list">
+                {m.headlines.map((h, i) => <AssetRow key={i} asset={h} />)}
+              </ul>
+            </>
+          )}
+        </MsgSection>
+      )}
+
+      {m.coldOpeners.length > 0 && (
+        <MsgSection title="Cold-outreach openers">
+          <ul className="msg-list">
+            {m.coldOpeners.map((o, i) => <AssetRow key={i} asset={o} />)}
+          </ul>
+        </MsgSection>
+      )}
+
+      {m.adAngles.length > 0 && (
+        <MsgSection title="Ad / content angles">
+          <ul className="msg-list">
+            {m.adAngles.map((a, i) => <AssetRow key={i} asset={a} />)}
+          </ul>
+        </MsgSection>
+      )}
+
+      {(m.objections.length > 0 || m.switchingTriggers.length > 0 || m.willingnessToPay) && (
+        <MsgSection title="Objections, triggers & pricing">
+          {m.objections.length > 0 && (
+            <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {m.objections.map((o, i) => (
+                <li key={i}>
+                  <div style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--ink)' }}>“{o.objection}”</div>
+                  <p style={{ margin: '2px 0 0', fontSize: 13, lineHeight: 1.5, color: 'var(--ink-2)' }}>{o.response}</p>
+                </li>
+              ))}
+            </ul>
+          )}
+          {m.switchingTriggers.length > 0 && (
+            <div style={{ marginTop: m.objections.length > 0 ? 16 : 0 }}>
+              <div className="t-xs ink-4" style={{ textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600, marginBottom: 6 }}>
+                Switching triggers
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {m.switchingTriggers.map((s, i) => (
+                  <span key={i} className="badge" style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--ink-2)' }}>{s}</span>
+                ))}
+              </div>
+            </div>
+          )}
+          {m.willingnessToPay && (
+            <div style={{ marginTop: 16 }}>
+              <div className="t-xs ink-4" style={{ textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600, marginBottom: 4 }}>
+                Willingness to pay
+              </div>
+              <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.5, color: 'var(--ink-2)' }}>{m.willingnessToPay}</p>
+            </div>
+          )}
+        </MsgSection>
+      )}
+    </div>
   )
 }
 

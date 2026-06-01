@@ -1,7 +1,11 @@
 import type { NextRequest } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
-import { extractBuyerLanguage, resolveSynthModel } from '@/lib/claude'
-import { aggregateBuyerLanguageSamples, enrichContexts } from '@/lib/buyer-language-aggregator'
+import { extractBuyerLanguage, synthesizeMessaging, resolveSynthModel } from '@/lib/claude'
+import {
+  aggregateBuyerLanguageSamples,
+  enrichContexts,
+  renderMessagingInput,
+} from '@/lib/buyer-language-aggregator'
 
 // POST /api/buyer-language/refresh — runs the aggregator (1-2 small queries),
 // hands sampled text to Claude for phrase + emotional extraction, INSERTs a
@@ -68,17 +72,33 @@ export async function POST(req: NextRequest) {
   // Tools already include enriched contexts from the JS aggregator.
   const tools = aggregated.tools
 
-  const { data, error } = await db
+  // Customer Voice v2: generate ready-to-use messaging from the verbatim
+  // quotes + extracted phrases/tools.
+  const vocText = renderMessagingInput({
+    phrases: extracted.commonPhrases.map((p) => p.text),
+    emotional: extracted.emotionalLanguage.map((p) => p.text),
+    tools: tools.map((t) => t.text),
+    quotes: aggregated.samples.map((s) => s.text),
+  })
+  const messaging = await synthesizeMessaging(vocText, model)
+
+  const row: Record<string, unknown> = { phrases, tools, emotional, stats: aggregated.stats }
+  if (messaging) row.messaging = messaging
+
+  let inserted = await db
     .from('buyer_language')
-    .insert({
-      phrases,
-      tools,
-      emotional,
-      stats: aggregated.stats,
-    })
+    .insert(row)
     .select('id, generated_at')
     .single()
 
+  // Tolerant of a not-yet-migrated `messaging` column: retry without it so the
+  // rest of the run still persists.
+  if (inserted.error && /messaging/.test(inserted.error.message) && messaging) {
+    const rest = { phrases, tools, emotional, stats: aggregated.stats }
+    inserted = await db.from('buyer_language').insert(rest).select('id, generated_at').single()
+  }
+
+  const { data, error } = inserted
   if (error || !data) {
     console.error('[supabase] buyer_language insert error:', error)
     return Response.json(
@@ -95,6 +115,7 @@ export async function POST(req: NextRequest) {
     phrases,
     tools,
     emotional,
+    messaging,
     stats: aggregated.stats,
     generatedAt: new Date(data.generated_at as string).getTime(),
   })
