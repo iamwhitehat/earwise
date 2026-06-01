@@ -152,8 +152,11 @@ export type Lead = {
 }
 
 /** Map a raw Supabase row to the client Lead shape. Tolerant of missing
- *  optional columns so a partially-migrated DB doesn't throw. */
-export function mapLeadRow(row: Record<string, unknown>): Lead {
+ *  optional columns so a partially-migrated DB doesn't throw. Accepts
+ *  `unknown` because Supabase infers an opaque row type when the column
+ *  projection is a runtime string rather than a literal. */
+export function mapLeadRow(rowRaw: unknown): Lead {
+  const row = (rowRaw ?? {}) as Record<string, unknown>
   const status = row.status
   return {
     id: row.id as number,
