@@ -641,12 +641,12 @@ export function OpportunityCard({
 
 // ─── Advantage opportunity card (Phase 4, headline ranking) ──────────────────
 
-const ADV_COMPONENT_LABELS: Array<{ key: keyof AdvantageComponents; label: string }> = [
-  { key: 'demand', label: 'Demand' },
-  { key: 'monetization', label: 'Monetization' },
-  { key: 'momentum', label: 'Momentum' },
-  { key: 'whitespace', label: 'Whitespace' },
-  { key: 'fitToYou', label: 'Fit to you' },
+const ADV_COMPONENT_LABELS: Array<{ key: keyof AdvantageComponents; label: string; desc: string }> = [
+  { key: 'demand', label: 'Demand', desc: 'How many people have this problem — post volume, distinct authors, engagement, and cross-source breadth.' },
+  { key: 'monetization', label: 'Monetization', desc: 'Signals people would pay — pricing talk, “would pay”, switching from paid tools.' },
+  { key: 'momentum', label: 'Momentum', desc: 'Whether the problem is accelerating week over week.' },
+  { key: 'whitespace', label: 'Whitespace', desc: 'How open the space is — low when incumbents already own it.' },
+  { key: 'fitToYou', label: 'Fit to you', desc: 'Match to your skills, ICP, and channels from your business memory.' },
 ]
 
 export function AdvantageOpportunityCard({
@@ -688,10 +688,16 @@ export function AdvantageOpportunityCard({
             ))}
           </div>
         </button>
-        <div style={{ textAlign: 'center' }}>
+        <button
+          type="button"
+          className="gauge-btn"
+          onClick={() => setOpen((o) => !o)}
+          aria-expanded={open}
+          title="What does this score mean?"
+        >
           <ScoreGauge score={opp.advantage * 10} size={66} />
-          <div className="gauge-cap">Advantage</div>
-        </div>
+          <div className="gauge-cap">Advantage <span className="gauge-q" aria-hidden="true">?</span></div>
+        </button>
       </div>
       <div className="adv-actions">
         <button
@@ -707,6 +713,26 @@ export function AdvantageOpportunityCard({
       {open && <AdvantageBreakdown opp={opp} />}
     </div>
   )
+}
+
+/** Plain-English, one-line gloss of what an Advantage score is made of —
+ *  "7.3/10 — 42 posts across 6 subs, confirmed in 3 sources". */
+function advantageLegend(opp: MaterializedOpportunity): string {
+  const score = (opp.advantage * 10).toFixed(1)
+  const subs = opp.subreddits.length
+  const parts = [`${opp.posts} post${opp.posts === 1 ? '' : 's'}`]
+  if (subs > 0) parts.push(`across ${subs} sub${subs === 1 ? '' : 's'}`)
+  if (opp.confirmedSources.length >= 2) parts.push(`confirmed in ${opp.confirmedSources.length} sources`)
+  return `${score}/10 — ${parts.join(', ')}`
+}
+
+function freshnessLabel(updatedAt?: number): string | null {
+  if (!updatedAt) return null
+  const diff = Date.now() - updatedAt
+  if (diff < 60_000) return 'updated just now'
+  if (diff < 3_600_000) return `updated ${Math.floor(diff / 60_000)}m ago`
+  if (diff < 86_400_000) return `updated ${Math.floor(diff / 3_600_000)}h ago`
+  return `updated ${Math.floor(diff / 86_400_000)}d ago`
 }
 
 // Records the founder's pursue / park decision (LEARN). The component snapshot
@@ -769,15 +795,21 @@ function PursueParkActions({ opp }: { opp: MaterializedOpportunity }) {
 }
 
 function AdvantageBreakdown({ opp }: { opp: MaterializedOpportunity }) {
+  const fresh = freshnessLabel(opp.updatedAt)
   return (
     <div className="adv-breakdown">
-      {ADV_COMPONENT_LABELS.map(({ key, label }) => {
+      <p className="adv-legend">
+        <strong>{advantageLegend(opp)}</strong>. Expected value <em>for you</em> — a
+        weighted blend of the five factors below (bars show each factor; the % to the
+        right is how much it adds to the score).
+      </p>
+      {ADV_COMPONENT_LABELS.map(({ key, label, desc }) => {
         const value = opp[key as 'demand']
         const contribution = opp.contributions[key]
         const pct = Math.round(value * 100)
         return (
           <div className="adv-row" key={key}>
-            <span className="adv-label">{label}</span>
+            <span className="adv-label" title={desc}>{label}</span>
             <span className="adv-bar" aria-hidden="true">
               <i style={{ width: `${pct}%` }} />
             </span>
@@ -787,6 +819,7 @@ function AdvantageBreakdown({ opp }: { opp: MaterializedOpportunity }) {
           </div>
         )
       })}
+      {fresh && <div className="adv-fresh">{fresh}</div>}
     </div>
   )
 }

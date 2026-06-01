@@ -44,6 +44,7 @@ export async function GET() {
       confirmedSources: Array.isArray(c.confirmedSources) ? (c.confirmedSources as string[]) : [],
       posts: typeof c.posts === 'number' ? c.posts : 0,
       subreddits: Array.isArray(c.subreddits) ? (c.subreddits as string[]) : [],
+      updatedAt: r.updated_at ? new Date(r.updated_at as string).getTime() : undefined,
     }
   })
 

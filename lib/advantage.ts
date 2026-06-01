@@ -115,6 +115,8 @@ export type MaterializedOpportunity = {
   confirmedSources: string[]
   posts: number
   subreddits: string[]
+  /** When this row was last materialized (epoch ms). Set on DB reads only. */
+  updatedAt?: number
 }
 
 /** Weighted, weight-normalized advantage from the five 0..1 components. */

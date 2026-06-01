@@ -1273,6 +1273,16 @@ a.accent-link:focus-visible {
   font: inherit; font-size: 12px; font-weight: 500; color: var(--accent-text); cursor: pointer;
 }
 .adv-explain:hover { text-decoration: underline; }
+.gauge-btn { background: none; border: none; padding: 0; cursor: pointer; font: inherit; text-align: center; }
+.gauge-q {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 13px; height: 13px; border-radius: 99px; margin-left: 2px;
+  background: var(--surface-2); color: var(--ink-3); font-size: 9px; font-weight: 700; vertical-align: middle;
+}
+.gauge-btn:hover .gauge-q { background: var(--accent); color: #fff; }
+.adv-legend { margin: 0 0 10px; font-size: 12px; line-height: 1.5; color: var(--ink-2); }
+.adv-legend strong { color: var(--ink); }
+.adv-fresh { margin-top: 9px; font-size: 11px; color: var(--ink-4); }
 .adv-breakdown { display: flex; flex-direction: column; gap: 7px; margin-top: 4px; }
 .adv-row { display: grid; grid-template-columns: 92px 1fr 40px; align-items: center; gap: 9px; }
 .adv-label { font-size: 12px; color: var(--ink-2); }

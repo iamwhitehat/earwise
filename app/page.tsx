@@ -250,6 +250,16 @@ function DashboardView() {
     }
   }, [scan.posts.length])
 
+  // Freshness indicator for the materialized opportunities (most recent row).
+  const advOppsFreshness = useMemo(() => {
+    const newest = (advOpps ?? []).reduce((max, o) => Math.max(max, o.updatedAt ?? 0), 0)
+    if (!newest) return null
+    const diff = Date.now() - newest
+    if (diff < 3_600_000) return `updated ${Math.max(1, Math.floor(diff / 60_000))}m ago`
+    if (diff < 86_400_000) return `updated ${Math.floor(diff / 3_600_000)}h ago`
+    return `updated ${Math.floor(diff / 86_400_000)}d ago`
+  }, [advOpps])
+
   // Comment scan stats — small rollup for the compact CommentCoverage line.
   const [commentStats, setCommentStats] = useState<CommentStats | null>(null)
   const [commentStatsError, setCommentStatsError] = useState<string | null>(null)
@@ -394,7 +404,10 @@ function DashboardView() {
             <div className="section-head">
               <h2>Top Opportunities</h2>
               <span className="pill">ranked by Advantage</span>
-              <span className="hint">expected value for you — tap a card to explain</span>
+              <span className="hint">
+                expected value for you — tap a card to explain
+                {advOppsFreshness ? ` · ${advOppsFreshness}` : ''}
+              </span>
               <ExportButtons
                 filenameStem="opportunities"
                 disabled={advOpps.length === 0}
