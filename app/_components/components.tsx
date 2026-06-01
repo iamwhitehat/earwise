@@ -472,6 +472,9 @@ export function FirstRunGuide({
           <h2>Welcome — three steps to your first signal</h2>
           <p>Once you scan, this card disappears and your dashboard fills in.</p>
         </div>
+        <a href="/welcome" className="btn btn-primary btn-sm" style={{ marginLeft: 'auto', textDecoration: 'none', whiteSpace: 'nowrap' }}>
+          <Icons.sparkles size={14} /> 60-second setup
+        </a>
       </header>
 
       <ol className="first-run-steps">

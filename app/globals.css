@@ -1352,6 +1352,33 @@ a.accent-link:focus-visible {
 .ww-bar i { display: block; height: 100%; border-radius: 99px; background: var(--score-high); transition: width .4s cubic-bezier(.2,.8,.2,1); }
 .ww-rate { font-size: 11.5px; color: var(--ink-3); text-align: right; white-space: nowrap; }
 
+/* Onboarding wizard (Phase 8) */
+.wiz { max-width: 640px; margin: 0 auto; padding: 32px 0; }
+.wiz-steps { display: flex; gap: 8px; justify-content: center; margin-bottom: 22px; }
+.wiz-dot { width: 28px; height: 4px; border-radius: 99px; background: var(--border); transition: background .25s; }
+.wiz-dot.on { background: var(--accent); }
+.wiz-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 30px; }
+.wiz-h { font-size: 24px; font-weight: 650; letter-spacing: -0.02em; color: var(--ink); margin: 0 0 8px; }
+.wiz-sub { font-size: 14px; line-height: 1.55; color: var(--ink-2); margin: 0 0 20px; }
+.wiz-err { color: var(--pain); font-size: 13px; margin: 0 0 12px; }
+.wiz-input {
+  width: 100%; padding: 12px 14px; margin-bottom: 16px;
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-sm);
+  color: var(--ink); font: inherit; font-size: 15px;
+}
+.wiz-input:focus { outline: none; border-color: var(--accent); }
+.wiz-subs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 22px; }
+.wiz-subs .wiz-sub {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 6px 12px; border-radius: 99px; cursor: pointer; font: inherit; font-size: 13px;
+  border: 1px solid var(--border); background: var(--surface-2); color: var(--ink-2);
+  transition: background .15s, border-color .15s, color .15s;
+}
+.wiz-subs .wiz-sub.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.wiz-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.wiz-next { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.wiz-next-label { font-size: 13px; font-weight: 600; color: var(--ink-3); margin-right: 2px; }
+
 /* ============================================================
    Reduced motion — honor OS-level vestibular-safety preference
    ============================================================ */
