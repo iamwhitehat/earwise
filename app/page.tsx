@@ -30,6 +30,51 @@ import type { WeekSnapshot } from '@/lib/snapshots'
 const TOP_N = 3
 const FRESH_LIMIT = 6
 
+/**
+ * Maps a fetch error message to the SETUP.md migration that's most likely
+ * responsible. Returns null when the error doesn't look like a missing-
+ * column / missing-table case. Pattern matches what the API routes already
+ * surface as their error.message.
+ */
+type MigrationKind = 'comments' | 'snapshots'
+function migrationHintFor(error: string, kind: MigrationKind): { id: string; what: string } | null {
+  const missing =
+    /column\s+\w+\.\w+\s+does not exist/i.test(error) ||
+    /relation\s+"?\w+"?\s+does not exist/i.test(error)
+  if (!missing) return null
+  if (kind === 'comments') {
+    return { id: '2b-quater', what: 'comment-stats tables (post_comments, num_comments)' }
+  }
+  return { id: '2b-septies', what: 'trend_snapshots table' }
+}
+
+function SilentFailureLine({
+  label,
+  error,
+  migration,
+}: {
+  label: string
+  error: string
+  migration: { id: string; what: string } | null
+}) {
+  return (
+    <span>
+      <span style={{ color: 'var(--ink-3)' }}>{label}:</span> {error}
+      {migration && (
+        <>
+          {' — '}
+          <span
+            title={`See SETUP.md section ${migration.id} (${migration.what})`}
+            style={{ fontWeight: 600, color: 'var(--tool)' }}
+          >
+            run SETUP.md §{migration.id}
+          </span>
+        </>
+      )}
+    </span>
+  )
+}
+
 function DashboardView() {
   const wl = useWatchlistCtx()
   const scan = useScanCtx()
@@ -267,16 +312,18 @@ function DashboardView() {
               Some dashboard panels couldn&apos;t load
             </strong>
             {commentStatsError && (
-              <span>
-                <span style={{ color: 'var(--ink-3)' }}>Comment coverage:</span>{' '}
-                {commentStatsError}
-              </span>
+              <SilentFailureLine
+                label="Comment coverage"
+                error={commentStatsError}
+                migration={migrationHintFor(commentStatsError, 'comments')}
+              />
             )}
             {snapshotsError && (
-              <span>
-                <span style={{ color: 'var(--ink-3)' }}>Trend direction badges:</span>{' '}
-                {snapshotsError}
-              </span>
+              <SilentFailureLine
+                label="Trend direction badges"
+                error={snapshotsError}
+                migration={migrationHintFor(snapshotsError, 'snapshots')}
+              />
             )}
           </div>
         )}
