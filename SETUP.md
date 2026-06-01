@@ -20,6 +20,29 @@ The classifier uses **Claude Haiku 4.5** (`claude-haiku-4-5`) — fast and
 inexpensive (~$1 / 1M input tokens). A 50-post subreddit on first load is
 roughly 50 × ~150 tokens ≈ ~7.5K input tokens, so well under a cent.
 
+Synthesis (Insights, Buyer Language) is selectable per-run via a
+Fast / Balanced / Max dropdown (Haiku / Sonnet 4.6 / Opus 4.6); Balanced is
+the default. Bulk classification always uses Haiku regardless.
+
+---
+
+## 1b. (Optional) Embeddings
+
+Topic clustering / dedup can use embeddings when a key is present; without one,
+the app falls back to deterministic logic and nothing breaks. To enable, add to
+`.env.local`:
+
+```
+EMBEDDINGS_API_KEY=...your-voyage-or-compatible-key...
+# optional overrides (defaults shown):
+# EMBEDDINGS_URL=https://api.voyageai.com/v1/embeddings
+# EMBEDDINGS_MODEL=voyage-3-lite
+```
+
+Any OpenAI-compatible `POST {input, model} -> {data:[{embedding}]}` endpoint
+works. **Leave it unset and everything still works** — `lib/embeddings.ts`
+no-ops (returns null) when the key is absent.
+
 ---
 
 ## 2. Supabase project
