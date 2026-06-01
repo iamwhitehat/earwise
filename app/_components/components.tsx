@@ -17,6 +17,7 @@ import type { CommentQuote } from '@/lib/posts-client'
 import type { Direction, WeekSnapshot } from '@/lib/snapshots'
 import type { StarterPreset } from '@/lib/use-watchlist'
 import type { MessagingAssets, MessagingAsset } from '@/lib/insight-types'
+import type { MaterializedOpportunity, AdvantageComponents } from '@/lib/advantage'
 import { SYNTH_TIERS, SYNTH_TIER_LABEL, type SynthTier } from '@/lib/use-synth-model'
 import { canonicalTopic } from '@/lib/topics'
 import { toCsv, toMarkdown, downloadFile } from '@/lib/csv'
@@ -635,6 +636,96 @@ export function OpportunityCard({
         error={insight?.status === 'error' ? insight.error! : null}
       />
     </button>
+  )
+}
+
+// ─── Advantage opportunity card (Phase 4, headline ranking) ──────────────────
+
+const ADV_COMPONENT_LABELS: Array<{ key: keyof AdvantageComponents; label: string }> = [
+  { key: 'demand', label: 'Demand' },
+  { key: 'monetization', label: 'Monetization' },
+  { key: 'momentum', label: 'Momentum' },
+  { key: 'whitespace', label: 'Whitespace' },
+  { key: 'fitToYou', label: 'Fit to you' },
+]
+
+export function AdvantageOpportunityCard({
+  opp,
+  rank,
+  selected,
+  onSelect,
+}: {
+  opp: MaterializedOpportunity
+  rank?: number
+  selected: boolean
+  onSelect: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div
+      className={`opp-card adv-card fade-in${selected ? ' selected' : ''}`}
+      style={rank != null ? { animationDelay: `${rank * 50}ms` } : undefined}
+    >
+      {rank != null && <span className="opp-rank mono">#{rank + 1}</span>}
+      <div className="opp-top">
+        <button type="button" className="adv-select" onClick={onSelect} aria-pressed={selected}>
+          <h3 className="opp-title">{opp.topic}</h3>
+          <div className="opp-foot">
+            <span className="tnum t-md ink-3">{opp.posts} posts</span>
+            {opp.confirmedSources.length >= 2 && (
+              <span
+                className="badge"
+                style={{ background: 'var(--score-high)', color: '#fff' }}
+                title={`Confirmed in: ${opp.confirmedSources.join(', ')}`}
+              >
+                {opp.confirmedSources.length} sources
+              </span>
+            )}
+          </div>
+          <div className="opp-subs">
+            {opp.subreddits.slice(0, 4).map((s) => (
+              <SubChip key={s} sub={s} />
+            ))}
+          </div>
+        </button>
+        <div style={{ textAlign: 'center' }}>
+          <ScoreGauge score={opp.advantage * 10} size={66} />
+          <div className="gauge-cap">Advantage</div>
+        </div>
+      </div>
+      <button
+        type="button"
+        className="adv-explain"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+      >
+        {open ? 'Hide breakdown' : 'Explain score'}
+      </button>
+      {open && <AdvantageBreakdown opp={opp} />}
+    </div>
+  )
+}
+
+function AdvantageBreakdown({ opp }: { opp: MaterializedOpportunity }) {
+  return (
+    <div className="adv-breakdown">
+      {ADV_COMPONENT_LABELS.map(({ key, label }) => {
+        const value = opp[key as 'demand']
+        const contribution = opp.contributions[key]
+        const pct = Math.round(value * 100)
+        return (
+          <div className="adv-row" key={key}>
+            <span className="adv-label">{label}</span>
+            <span className="adv-bar" aria-hidden="true">
+              <i style={{ width: `${pct}%` }} />
+            </span>
+            <span className="adv-val tnum" title={`contributes ${Math.round(contribution * 100)} pts to the score`}>
+              {pct}%
+            </span>
+          </div>
+        )
+      })}
+    </div>
   )
 }
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { computeOpportunity } from '@/lib/scan-types'
 import {
@@ -8,6 +8,7 @@ import {
   BuyerLanguageSummary,
   CategoryGroups,
   CommentCoverage,
+  AdvantageOpportunityCard,
   ErrorsBanner,
   ExportButtons,
   FirstRunGuide,
@@ -27,6 +28,7 @@ import { Icons, Spinner } from './_components/icons'
 import { STARTER_PRESETS } from '@/lib/use-watchlist'
 import { canonicalTopic } from '@/lib/topics'
 import type { WeekSnapshot } from '@/lib/snapshots'
+import type { MaterializedOpportunity } from '@/lib/advantage'
 
 const TOP_N = 3
 const FRESH_LIMIT = 6
@@ -216,6 +218,37 @@ function DashboardView() {
     }
   }, [])
 
+  // Materialized Advantage-ranked opportunities (Phase 4). When present they
+  // are the headline ranking; otherwise the dashboard falls back to the
+  // in-memory computeOpportunity ranking below. Auto-populates once when the
+  // table is empty but posts exist.
+  const [advOpps, setAdvOpps] = useState<MaterializedOpportunity[] | null>(null)
+  const triedMaterialize = useRef(false)
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      try {
+        const res = await fetch('/api/opportunities')
+        if (!res.ok) return
+        const json = (await res.json()) as { opportunities?: MaterializedOpportunity[] }
+        let opps = json.opportunities ?? []
+        // Empty table + we have data to rank → materialize once, then re-read.
+        if (opps.length === 0 && scan.posts.length > 0 && !triedMaterialize.current) {
+          triedMaterialize.current = true
+          const r = await fetch('/api/opportunities/refresh', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
+          if (r.ok) opps = ((await r.json()) as { opportunities?: MaterializedOpportunity[] }).opportunities ?? []
+        }
+        if (!cancelled) setAdvOpps(opps)
+      } catch {
+        /* opportunities table may be absent — fall back, non-fatal */
+      }
+    }
+    load()
+    return () => {
+      cancelled = true
+    }
+  }, [scan.posts.length])
+
   // Comment scan stats — small rollup for the compact CommentCoverage line.
   const [commentStats, setCommentStats] = useState<CommentStats | null>(null)
   const [commentStatsError, setCommentStatsError] = useState<string | null>(null)
@@ -355,6 +388,46 @@ function DashboardView() {
             presets={STARTER_PRESETS}
             onApplyPreset={wl.applyPreset}
           />
+        ) : advOpps && advOpps.length > 0 ? (
+          <section className="section">
+            <div className="section-head">
+              <h2>Top Opportunities</h2>
+              <span className="pill">ranked by Advantage</span>
+              <span className="hint">expected value for you — tap a card to explain</span>
+              <ExportButtons
+                filenameStem="opportunities"
+                disabled={advOpps.length === 0}
+                build={() => ({
+                  headers: ['rank', 'topic', 'advantage', 'demand', 'monetization', 'momentum', 'whitespace', 'fit_to_you', 'posts', 'sources'],
+                  rows: advOpps.map((o, i) => [
+                    String(i + 1),
+                    o.topic,
+                    o.advantage.toFixed(3),
+                    o.demand.toFixed(2),
+                    o.monetization.toFixed(2),
+                    o.momentum.toFixed(2),
+                    o.whitespace.toFixed(2),
+                    o.fitToYou.toFixed(2),
+                    String(o.posts),
+                    o.confirmedSources.join('; '),
+                  ]),
+                })}
+              />
+            </div>
+            <div className="opp-grid">
+              {advOpps.slice(0, 6).map((opp, i) => (
+                <AdvantageOpportunityCard
+                  key={opp.topic}
+                  opp={opp}
+                  rank={i}
+                  selected={scan.selectedTopic === opp.topic}
+                  onSelect={() =>
+                    applyTopic(scan.selectedTopic === opp.topic ? null : opp.topic)
+                  }
+                />
+              ))}
+            </div>
+          </section>
         ) : (
           <section className="section">
             <div className="section-head">

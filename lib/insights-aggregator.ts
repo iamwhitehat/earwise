@@ -5,6 +5,7 @@ import { canonicalTopic } from './topics'
 import { dedupePosts } from './dedup'
 import { redditPermalink, type EvidenceRef } from './evidence'
 import { crossSourceConfirmation } from './sources/confirmation'
+import { whitespaceFromCounts } from './whitespace'
 
 const MAX_POSTS = 10_000
 const MAX_DEEP_POSTS = 2_000
@@ -32,6 +33,10 @@ export type OpportunityEvidence = {
   subreddits: string[]
   /** Distinct sources confirming this topic (always includes 'reddit'). */
   confirmedSources: string[]
+  /** 0..1 monetization signal (would-pay / switching density + B2B lean). */
+  monetization: number
+  /** 0..1 whitespace (unmet demand + dissatisfaction − saturation). */
+  whitespace: number
   examples: EvidenceRef[]
 }
 
@@ -171,6 +176,8 @@ function buildOpportunities(
     authors: Set<string>
     subs: Set<string>
     engagement: number
+    toolComplaintPosts: number
+    featurePosts: number
   }
   const byTopic = new Map<string, Agg>()
   for (const p of posts) {
@@ -178,13 +185,58 @@ function buildOpportunities(
     if (!topic) continue
     let e = byTopic.get(topic)
     if (!e) {
-      e = { posts: [], authors: new Set(), subs: new Set(), engagement: 0 }
+      e = {
+        posts: [],
+        authors: new Set(),
+        subs: new Set(),
+        engagement: 0,
+        toolComplaintPosts: 0,
+        featurePosts: 0,
+      }
       byTopic.set(topic, e)
     }
     e.posts.push(p)
     if (p.author) e.authors.add(p.author.toLowerCase())
     e.subs.add(p.subreddit)
     if (typeof p.num_comments === 'number') e.engagement += p.num_comments
+    if (p.category === 'tool_complaint') e.toolComplaintPosts++
+    else if (p.category === 'feature_request') e.featurePosts++
+  }
+
+  // Deep-scan stats per canonical topic: drives whitespace + monetization.
+  type DeepStats = {
+    deepCount: number
+    deepDemand: number
+    deepDemandNoTool: number
+    hateQuotes: number
+    wouldPay: number
+    switched: number
+    distinctTools: Set<string>
+  }
+  const deepStats = new Map<string, DeepStats>()
+  for (const d of deep) {
+    const topic = canonicalTopic(d.topic)
+    if (!topic) continue
+    let s = deepStats.get(topic)
+    if (!s) {
+      s = { deepCount: 0, deepDemand: 0, deepDemandNoTool: 0, hateQuotes: 0, wouldPay: 0, switched: 0, distinctTools: new Set() }
+      deepStats.set(topic, s)
+    }
+    s.deepCount++
+    const tools = Array.isArray(d.tools) ? d.tools : []
+    for (const t of tools) if (typeof t === 'string' && t.trim()) s.distinctTools.add(t.trim().toLowerCase())
+    if (d.category === 'pain_point' || d.category === 'feature_request') {
+      s.deepDemand++
+      if (tools.length === 0) s.deepDemandNoTool++
+    }
+    if (Array.isArray(d.quotes)) {
+      for (const raw of d.quotes as RawQuote[]) {
+        if (!raw || typeof raw.type !== 'string') continue
+        if (raw.type === 'hate') s.hateQuotes++
+        else if (raw.type === 'would_pay') s.wouldPay++
+        else if (raw.type === 'switched') s.switched++
+      }
+    }
   }
 
   // Map canonical topic -> a couple of strong deep-scan quotes (with links).
@@ -237,15 +289,33 @@ function buildOpportunities(
       const confirmedSources = Array.from(
         new Set(['reddit', ...(confirmation[topic] ?? [])]),
       ).sort()
+      const total = e.posts.length
+      const s = deepStats.get(topic)
+      const whitespace = whitespaceFromCounts({
+        total,
+        toolComplaintPosts: e.toolComplaintPosts,
+        deepCount: s?.deepCount ?? 0,
+        deepDemand: s?.deepDemand ?? 0,
+        deepDemandNoTool: s?.deepDemandNoTool ?? 0,
+        hateQuotes: s?.hateQuotes ?? 0,
+        distinctTools: s?.distinctTools.size ?? 0,
+      })
+      const deepCount = s?.deepCount ?? 0
+      const quoteDensity =
+        deepCount > 0 ? ((s?.wouldPay ?? 0) + 0.6 * (s?.switched ?? 0)) / deepCount : 0
+      const b2bHint = (e.toolComplaintPosts + e.featurePosts) / Math.max(1, total)
+      const monetization = Math.min(1, 0.7 * quoteDensity + 0.3 * b2bHint)
       return {
         topic,
-        posts: e.posts.length,
+        posts: total,
         uniqueAuthors: e.authors.size,
         engagement: e.engagement,
         momentum: computeDirection(snapshotsByTopic[topic] ?? []),
         weeklyCounts: snapshotsByTopic[topic] ?? [],
         subreddits: Array.from(e.subs).sort(),
         confirmedSources,
+        monetization,
+        whitespace,
         examples,
       }
     })

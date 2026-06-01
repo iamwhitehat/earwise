@@ -424,8 +424,10 @@ create index if not exists opportunities_advantage_idx
 ```
 
 Both tables are tolerated when absent: memory just isn't injected, and the
-dashboard falls back to its in-memory opportunity ranking until you
-materialize (`POST /api/opportunities/refresh`, also run after each scan).
+dashboard falls back to its in-memory opportunity ranking. The dashboard
+auto-populates `opportunities` on first load when it's empty; recompute any
+time with `POST /api/opportunities/refresh` (optionally `{ weights }` to tune
+the per-component weights).
 
 ### 2c. Get the credentials
 

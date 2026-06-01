@@ -102,6 +102,21 @@ export type AdvantageResult = {
   contributions: AdvantageComponents
 }
 
+/** A materialized opportunity row (shape shared by the API + client). */
+export type MaterializedOpportunity = {
+  topic: string
+  advantage: number
+  demand: number
+  monetization: number
+  momentum: number
+  whitespace: number
+  fitToYou: number
+  contributions: AdvantageComponents
+  confirmedSources: string[]
+  posts: number
+  subreddits: string[]
+}
+
 /** Weighted, weight-normalized advantage from the five 0..1 components. */
 export function computeAdvantage(
   components: AdvantageComponents,
