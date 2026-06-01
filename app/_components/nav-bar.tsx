@@ -5,12 +5,51 @@ import { usePathname } from 'next/navigation'
 import { useScanCtx, useWatchlistCtx } from './scan-provider'
 import { useSidebarCtx } from './sidebar-provider'
 import { ThemeToggle } from './theme-toggle'
-import { Icons, Spinner } from './icons'
+import { Icons, Spinner, type SimpleIconProps } from './icons'
 
-// Dark, vertical sidebar (replaces the old horizontal NavBar). Contains
-// brand + Dashboard / Explore links + watchlist with per-sub counts +
-// a Scan button at the bottom. Watchlist items link to the legacy
-// /r/[sub] view since the design's Subreddit Detail View isn't wired up.
+// Dark, vertical sidebar. The information architecture mirrors the funnel a
+// founder actually walks — Discover → Opportunities → Customer Voice → Act —
+// rather than a flat list of features. Folded-in destinations (Insights under
+// Opportunities, the raw Signal feed under Act) render as nested sub-items.
+type NavLink = { href: string; label: string; icon: (p: SimpleIconProps) => React.ReactNode; sub?: boolean }
+type NavGroup = { label: string; items: NavLink[] }
+
+const NAV_GROUPS: NavGroup[] = [
+  {
+    label: 'Discover',
+    items: [{ href: '/explore', label: 'Discover', icon: Icons.compass }],
+  },
+  {
+    label: 'Opportunities',
+    items: [
+      { href: '/', label: 'Opportunities', icon: Icons.grid },
+      { href: '/insights', label: 'Trends & Insights', icon: Icons.sparkles, sub: true },
+    ],
+  },
+  {
+    label: 'Customer Voice',
+    items: [{ href: '/customer-voice', label: 'Customer Voice', icon: Icons.chat }],
+  },
+  {
+    label: 'Act',
+    items: [
+      { href: '/leads', label: 'Leads', icon: Icons.inbox },
+      { href: '/signals', label: 'Signal feed', icon: Icons.bolt, sub: true },
+    ],
+  },
+  {
+    label: 'More',
+    items: [
+      { href: '/digest', label: 'Digest', icon: Icons.bell },
+      { href: '/guide', label: 'Guide', icon: Icons.flag },
+    ],
+  },
+]
+
+function isActive(pathname: string, href: string): boolean {
+  return href === '/' ? pathname === '/' : pathname.startsWith(href)
+}
+
 export function NavBar() {
   const pathname = usePathname()
   const { watchlist } = useWatchlistCtx()
@@ -23,14 +62,6 @@ export function NavBar() {
   }
 
   const lastScanLabel = formatLastScan(scan.lastScanAt)
-  const onDash = pathname === '/'
-  const onExplore = pathname.startsWith('/explore')
-  const onInsights = pathname.startsWith('/insights')
-  const onLanguage = pathname.startsWith('/language')
-  const onSignals = pathname.startsWith('/signals')
-  const onLeads = pathname.startsWith('/leads')
-  const onGuide = pathname.startsWith('/guide')
-  const onDigest = pathname.startsWith('/digest')
 
   // Identify the active watchlist sub from /r/[sub]. Case-folded compare
   // because seeded subs preserve their original case (`SaaS`) while
@@ -67,49 +98,37 @@ export function NavBar() {
         </div>
       </Link>
 
-      <Link href="/" className={`nav-item${onDash ? ' active' : ''}`}>
-        <Icons.grid />
-        Dashboard
-      </Link>
-      <Link href="/explore" className={`nav-item${onExplore ? ' active' : ''}`}>
-        <Icons.compass />
-        Explore
-      </Link>
-      <Link href="/insights" className={`nav-item${onInsights ? ' active' : ''}`}>
-        <Icons.sparkles />
-        Insights
-      </Link>
-      <Link href="/language" className={`nav-item${onLanguage ? ' active' : ''}`}>
-        <Icons.chat />
-        Buyer Language
-      </Link>
-      <Link href="/signals" className={`nav-item${onSignals ? ' active' : ''}`}>
-        <Icons.bolt />
-        Signals
-      </Link>
-      <Link href="/leads" className={`nav-item${onLeads ? ' active' : ''}`}>
-        <Icons.inbox />
-        Leads
-      </Link>
-      <Link href="/guide" className={`nav-item${onGuide ? ' active' : ''}`}>
-        <Icons.flag />
-        Guide
-      </Link>
-      <Link href="/digest" className={`nav-item${onDigest ? ' active' : ''}`}>
-        <Icons.bell />
-        Digest
-      </Link>
+      {NAV_GROUPS.map((group) => (
+        <div key={group.label}>
+          <div className="side-label">{group.label}</div>
+          {group.items.map((item) => {
+            const Icon = item.icon
+            const active = isActive(pathname, item.href)
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`nav-item${item.sub ? ' nav-sub' : ''}${active ? ' active' : ''}`}
+                aria-current={active ? 'page' : undefined}
+              >
+                <Icon />
+                {item.label}
+              </Link>
+            )
+          })}
+        </div>
+      ))}
 
       <div className="side-label">Watchlist · {watchlist.length}</div>
       <div className="side-watch">
         {watchlist.map((sub) => {
-          const isActive = activeSub === sub.toLowerCase()
+          const isSubActive = activeSub === sub.toLowerCase()
           return (
             <Link
               key={sub}
               href={`/r/${sub}`}
-              className={`watch-row${isActive ? ' active' : ''}`}
-              aria-current={isActive ? 'page' : undefined}
+              className={`watch-row${isSubActive ? ' active' : ''}`}
+              aria-current={isSubActive ? 'page' : undefined}
             >
               <span className="watch-dot" />
               <span className="mono">r/{sub}</span>

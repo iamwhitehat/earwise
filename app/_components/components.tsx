@@ -1522,14 +1522,14 @@ export function BuyerLanguageSummary({
   return (
     <section className="section">
       <div className="section-head">
-        <h2>Buyer Language</h2>
+        <h2>Customer Voice</h2>
         <span className="hint">
           {data
             ? `top ${limit} per column · from ${data.stats.postCount} posts · ${data.stats.commentCount} comments`
             : 'recurring phrases · tools · emotional words'}
         </span>
         <a
-          href="/language"
+          href="/customer-voice"
           className="btn btn-ghost btn-sm"
           style={{ marginLeft: 8, textDecoration: 'none' }}
         >
@@ -1551,9 +1551,9 @@ export function BuyerLanguageSummary({
         <div className="card empty">
           <span className="e-ico"><Icons.sparkles size={26} /></span>
           <div>
-            No buyer-language data yet.{' '}
-            <a href="/language" style={{ color: 'var(--accent-text)', fontWeight: 550 }}>
-              Generate on /language →
+            No Customer Voice data yet.{' '}
+            <a href="/customer-voice" style={{ color: 'var(--accent-text)', fontWeight: 550 }}>
+              Generate on Customer Voice →
             </a>
           </div>
         </div>
@@ -1777,7 +1777,7 @@ export function BuyerLanguagePanel({
     <section className="section">
       {showHeader && (
         <div className="section-head">
-          <h2>Buyer Language</h2>
+          <h2>Customer Voice</h2>
           <span className="pill">phrases · tools · emotional words</span>
           <span className="hint">
             {data

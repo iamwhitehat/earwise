@@ -212,6 +212,8 @@ a { color: inherit; text-decoration: none; }
   transition: background .12s, color .12s;
 }
 .nav-item svg { width: 16px; height: 16px; flex-shrink: 0; opacity: .85; }
+.nav-sub { padding-left: 18px; font-size: 12.5px; color: var(--side-ink-3); }
+.nav-sub svg { width: 14px; height: 14px; }
 .nav-item:hover { background: var(--side-bg-2); color: var(--side-ink); }
 .nav-item.active { background: var(--side-bg-2); color: #fff; }
 .nav-item.active svg { opacity: 1; color: var(--accent-ring); }
