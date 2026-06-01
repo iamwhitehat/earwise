@@ -16,6 +16,7 @@ import {
 import type { CommentQuote } from '@/lib/posts-client'
 import type { Direction, WeekSnapshot } from '@/lib/snapshots'
 import type { StarterPreset } from '@/lib/use-watchlist'
+import { SYNTH_TIERS, SYNTH_TIER_LABEL, type SynthTier } from '@/lib/use-synth-model'
 import { canonicalTopic } from '@/lib/topics'
 import { toCsv, toMarkdown, downloadFile } from '@/lib/csv'
 import { Icons, Spinner, type SimpleIconProps } from './icons'
@@ -2199,6 +2200,35 @@ export function PostsPerScanSelector({
         {options.map((n) => (
           <option key={n} value={n}>
             {n}
+          </option>
+        ))}
+      </select>
+    </label>
+  )
+}
+
+// Synthesis model tier picker (Fast / Balanced / Max) for the Insights +
+// Buyer Language headers. Reuses the .pps inline-select styling.
+export function SynthModelSelect({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: SynthTier
+  onChange: (tier: SynthTier) => void
+  disabled?: boolean
+}) {
+  return (
+    <label className="pps" title="Synthesis model — bulk classification always uses Haiku">
+      <span>Model</span>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value as SynthTier)}
+        disabled={disabled}
+      >
+        {SYNTH_TIERS.map((t) => (
+          <option key={t} value={t}>
+            {SYNTH_TIER_LABEL[t]}
           </option>
         ))}
       </select>

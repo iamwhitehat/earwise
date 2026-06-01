@@ -6,12 +6,14 @@ import { useScanCtx } from '../_components/scan-provider'
 import {
   BuyerLanguagePanel,
   StalenessBanner,
+  SynthModelSelect,
   Topbar,
   collectSubreddits,
   filterLangItems,
   type BuyerLanguageData,
   type LangItem,
 } from '../_components/components'
+import { useSynthModel } from '@/lib/use-synth-model'
 import { CATEGORY_CONFIG, CATEGORY_ORDER, type Category } from '@/lib/categories'
 
 type CatFilter = 'all' | Category
@@ -26,6 +28,7 @@ function formatAgo(ts: number): string {
 
 export default function BuyerLanguagePage() {
   const scan = useScanCtx()
+  const { tier, setTier } = useSynthModel()
   const [data, setData] = useState<BuyerLanguageData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -58,7 +61,11 @@ export default function BuyerLanguagePage() {
     setRefreshing(true)
     setError(null)
     try {
-      const res = await fetch('/api/buyer-language/refresh', { method: 'POST' })
+      const res = await fetch('/api/buyer-language/refresh', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ tier }),
+      })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error ?? `Error ${res.status}`)
       setData(json as BuyerLanguageData)
@@ -88,6 +95,7 @@ export default function BuyerLanguagePage() {
   return (
     <>
       <Topbar title="Buyer Language" posts={scan.posts}>
+        <SynthModelSelect value={tier} onChange={setTier} disabled={refreshing} />
         <button
           type="button"
           className="btn btn-primary btn-sm"

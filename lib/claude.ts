@@ -18,6 +18,29 @@ const VALID: ReadonlySet<Category> = new Set([
   'other',
 ])
 
+// ─── Model tiers ──────────────────────────────────────────────────────────────
+// Bulk work (classification, topic extraction, comment extraction, drafts) is
+// always the cheapest Haiku — high volume, cached, cost-sensitive.
+export const MODEL_BULK = 'claude-haiku-4-5-20251001'
+
+// Synthesis (Insights, Buyer Language) is user-selectable via a Fast/Balanced/
+// Max dropdown. Balanced (Sonnet) is the default — good enough for synthesis;
+// Max (Opus) is opt-in for whole-business runs.
+export type SynthTier = 'fast' | 'balanced' | 'max'
+export const SYNTH_MODELS: Record<SynthTier, string> = {
+  fast: MODEL_BULK,
+  balanced: 'claude-sonnet-4-6',
+  max: 'claude-opus-4-6',
+}
+export const DEFAULT_SYNTH_TIER: SynthTier = 'balanced'
+
+/** Resolve a (possibly untrusted) tier string to a concrete model id. */
+export function resolveSynthModel(tier: unknown): string {
+  return typeof tier === 'string' && tier in SYNTH_MODELS
+    ? SYNTH_MODELS[tier as SynthTier]
+    : SYNTH_MODELS[DEFAULT_SYNTH_TIER]
+}
+
 let _client: Anthropic | null = null
 
 function getClient(): Anthropic {
@@ -167,7 +190,7 @@ export async function classifyPost(
   try {
     const msg = await callClaude(() =>
       getClient().messages.create({
-        model: 'claude-haiku-4-5',
+        model: MODEL_BULK,
         max_tokens: 60,
         system,
         messages: [{ role: 'user', content }],
@@ -226,7 +249,7 @@ export async function extractTopic(
   try {
     const msg = await callClaude(() =>
       getClient().messages.create({
-        model: 'claude-haiku-4-5',
+        model: MODEL_BULK,
         max_tokens: 30,
         system: TOPIC_SYSTEM_PROMPT,
         messages: [{ role: 'user', content: userContent }],
@@ -261,7 +284,7 @@ export async function summarizeTrend(topic: string, titles: string[]): Promise<s
   try {
     const msg = await callClaude(() =>
       getClient().messages.create({
-        model: 'claude-haiku-4-5',
+        model: MODEL_BULK,
         max_tokens: 120,
         system: INSIGHT_SYSTEM_PROMPT,
         messages: [{ role: 'user', content: userContent }],
@@ -392,7 +415,7 @@ export async function suggestSubreddits(niche: string): Promise<string[]> {
   try {
     const msg = await callClaude(() =>
       getClient().messages.create({
-        model: 'claude-haiku-4-5',
+        model: MODEL_BULK,
         max_tokens: 200,
         system: SUGGEST_SUBS_SYSTEM_PROMPT,
         messages: [{ role: 'user', content: `Niche: ${trimmed}` }],
@@ -480,11 +503,12 @@ function normalizeKnowledgeInsights(raw: unknown): KnowledgeInsight[] {
 
 export async function synthesizeKnowledgeInsights(
   aggregatedText: string,
+  model: string = SYNTH_MODELS[DEFAULT_SYNTH_TIER],
 ): Promise<KnowledgeInsight[]> {
   try {
     const msg = await callClaude(() =>
       getClient().messages.create({
-        model: 'claude-haiku-4-5',
+        model,
         max_tokens: 2000,
         system: KNOWLEDGE_INSIGHTS_SYSTEM_PROMPT,
         messages: [{ role: 'user', content: aggregatedText }],
@@ -585,10 +609,11 @@ function normalizeBuyerLanguageItems(raw: unknown, maxItems: number): BuyerLangu
 
 export async function extractBuyerLanguage(
   samples: Array<{ post_id: string; text: string }>,
+  model: string = SYNTH_MODELS[DEFAULT_SYNTH_TIER],
 ): Promise<BuyerLanguageExtraction> {
   if (samples.length === 0) return { commonPhrases: [], emotionalLanguage: [] }
   const body = samples
-    .map((s, i) => `[${s.post_id}] ${s.text.replace(/\s+/g, ' ').trim()}`)
+    .map((s) => `[${s.post_id}] ${s.text.replace(/\s+/g, ' ').trim()}`)
     .filter((s) => s.length > 0)
     .join('\n\n')
     .slice(0, 60_000) // safety cap on prompt body
@@ -596,7 +621,7 @@ export async function extractBuyerLanguage(
   try {
     const msg = await callClaude(() =>
       getClient().messages.create({
-        model: 'claude-haiku-4-5',
+        model,
         max_tokens: 3000,
         system: BUYER_LANGUAGE_SYSTEM_PROMPT,
         messages: [{ role: 'user', content: body }],
@@ -673,7 +698,7 @@ export async function draftSignalReply(opts: {
   try {
     const msg = await callClaude(() =>
       getClient().messages.create({
-        model: 'claude-haiku-4-5',
+        model: MODEL_BULK,
         max_tokens: 400,
         system: DRAFT_REPLY_SYSTEM_PROMPT,
         messages: [{ role: 'user', content: userContent }],
@@ -704,7 +729,7 @@ export async function draftOpener(opts: OpenerInput): Promise<string | null> {
   try {
     const msg = await callClaude(() =>
       getClient().messages.create({
-        model: 'claude-haiku-4-5',
+        model: MODEL_BULK,
         max_tokens: 400,
         system: OPENER_SYSTEM_PROMPT,
         messages: [{ role: 'user', content: userContent }],
@@ -732,7 +757,7 @@ export async function extractCommentInsights(
   try {
     const msg = await callClaude(() =>
       getClient().messages.create({
-        model: 'claude-haiku-4-5',
+        model: MODEL_BULK,
         // Budget covers tools + quotes + ~20 classification entries.
         max_tokens: 1200,
         system: COMMENT_INSIGHTS_SYSTEM_PROMPT,

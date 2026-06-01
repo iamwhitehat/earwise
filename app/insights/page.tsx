@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react'
 import { Icons, Spinner } from '../_components/icons'
 import { useScanCtx } from '../_components/scan-provider'
-import { DirectionBadge, StalenessBanner, Topbar } from '../_components/components'
+import { DirectionBadge, StalenessBanner, SynthModelSelect, Topbar } from '../_components/components'
+import { useSynthModel } from '@/lib/use-synth-model'
 import type { WeekSnapshot } from '@/lib/snapshots'
 
 const CHART_WEEKS = 8
@@ -45,6 +46,7 @@ function confidenceClass(c: 'high' | 'medium' | 'low'): string {
 
 export default function InsightsPage() {
   const scan = useScanCtx()
+  const { tier, setTier } = useSynthModel()
   const [snapshot, setSnapshot] = useState<Snapshot>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -75,7 +77,11 @@ export default function InsightsPage() {
     setRefreshing(true)
     setError(null)
     try {
-      const res = await fetch('/api/insights/refresh', { method: 'POST' })
+      const res = await fetch('/api/insights/refresh', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ tier }),
+      })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error ?? `Error ${res.status}`)
       setSnapshot(json as Snapshot)
@@ -89,6 +95,7 @@ export default function InsightsPage() {
   return (
     <>
       <Topbar title="Insights" posts={scan.posts}>
+        <SynthModelSelect value={tier} onChange={setTier} disabled={refreshing} />
         <button
           type="button"
           className="btn btn-primary btn-sm"
