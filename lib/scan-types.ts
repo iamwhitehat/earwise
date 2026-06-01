@@ -1,5 +1,6 @@
 import type { ApiPost } from './posts-client'
 import { canonicalTopic } from './topics'
+import { whitespaceFromCounts, type WhitespaceCounts } from './whitespace'
 
 export const PER_SUB_CAP = 500
 export const DONE_FLASH_MS = 1000
@@ -72,6 +73,7 @@ export type Opportunity = {
   otherCount: number
   subreddits: string[]
   engagement: number  // median per-post engagement used in the score (0 when absent)
+  whitespace: number  // 0..1 — unmet demand + incumbent dissatisfaction − saturation
   score: number       // 0..10, rounded to int
   scoreRaw: number    // exact (for sorting ties)
 }
@@ -136,6 +138,13 @@ export function computeOpportunity(posts: TaggedPost[], topic: string): Opportun
   const subs = new Set<string>()
   const engagementValues: number[] = []
   let total = 0
+  // Whitespace signals — accumulated over the topic's deep-scanned posts,
+  // where tools/quotes (and therefore "is anyone solving this?") are known.
+  let deepCount = 0
+  let deepDemand = 0
+  let deepDemandNoTool = 0
+  let hateQuotes = 0
+  const distinctTools = new Set<string>()
   for (const p of posts) {
     // `topic` is a canonical label; match posts whose raw topic reduces to it.
     if (canonicalTopic(p.topic) !== topic) continue
@@ -149,6 +158,23 @@ export function computeOpportunity(posts: TaggedPost[], topic: string): Opportun
       case 'tool_complaint': toolCount++; break
       default: otherCount++
     }
+
+    if (p.commentsScannedAt != null) {
+      deepCount++
+      const tools = Array.isArray(p.tools) ? p.tools : []
+      for (const t of tools) {
+        if (typeof t === 'string' && t.trim()) distinctTools.add(t.trim().toLowerCase())
+      }
+      if (p.category === 'pain_point' || p.category === 'feature_request') {
+        deepDemand++
+        if (tools.length === 0) deepDemandNoTool++
+      }
+      if (Array.isArray(p.quotes)) {
+        for (const q of p.quotes) {
+          if (q && typeof q === 'object' && (q as { type?: string }).type === 'hate') hateQuotes++
+        }
+      }
+    }
   }
   const engagement = median(engagementValues)
   const { score, scoreRaw } = scoreOpportunity({
@@ -158,6 +184,15 @@ export function computeOpportunity(posts: TaggedPost[], topic: string): Opportun
     featureCount,
     engagement,
   })
+  const counts: WhitespaceCounts = {
+    total,
+    toolComplaintPosts: toolCount,
+    deepCount,
+    deepDemand,
+    deepDemandNoTool,
+    hateQuotes,
+    distinctTools: distinctTools.size,
+  }
   return {
     topic,
     total,
@@ -167,6 +202,7 @@ export function computeOpportunity(posts: TaggedPost[], topic: string): Opportun
     otherCount,
     subreddits: Array.from(subs).sort(),
     engagement,
+    whitespace: whitespaceFromCounts(counts),
     score,
     scoreRaw,
   }
