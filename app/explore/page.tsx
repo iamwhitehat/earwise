@@ -22,6 +22,7 @@ import {
   useWatchlistCtx,
 } from '../_components/scan-provider'
 import { POSTS_PER_SCAN_OPTIONS, type PostsPerScan } from '@/lib/use-posts-per-scan'
+import { canonicalTopic } from '@/lib/topics'
 import { Icons, Spinner } from '../_components/icons'
 
 function ExploreView() {
@@ -108,7 +109,7 @@ function ExploreView() {
   useDropStaleScanTopic(scan.selectedTopic, scan.scanTrends, applyTopic)
 
   const filteredPosts = scan.selectedTopic
-    ? scan.posts.filter((p) => p.topic === scan.selectedTopic)
+    ? scan.posts.filter((p) => canonicalTopic(p.topic) === scan.selectedTopic)
     : scan.posts
 
   return (

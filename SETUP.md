@@ -118,6 +118,27 @@ classification-only rows now also writes `posted_at`). Snapshot recompute
 falls back to `analyzed_at` for any row still missing `posted_at`, so
 trends keep working through the migration without a manual reprocess.
 
+### 2b-undecies. Migration for canonical topics (Phase 1)
+
+Adds a `canonical_topic` column on `posts` so near-duplicate topic labels
+("auth problems" vs "authentication issues") collapse into one trend instead
+of fragmenting. Run once:
+
+```sql
+alter table posts add column if not exists canonical_topic text;
+create index if not exists posts_canonical_topic_idx
+  on posts (canonical_topic) where canonical_topic is not null;
+```
+
+Existing rows stay `canonical_topic = NULL`. They're filled by a tolerant
+backfill (`POST /api/topics/backfill`, also run opportunistically after each
+scan via the snapshot refresh) that computes the canonical form from `topic`.
+Aggregations don't depend on the column being populated — trends, snapshots,
+insights, and topic filtering all derive the canonical form from `topic` at
+read time (identical to the stored value in this phase), so everything keeps
+working before and after the migration. The stored column is the seam a later
+embedding/model-based canonicalization pass writes through.
+
 ### 2b-septies. Migration for weekly trend snapshots
 
 Adds a `trend_snapshots` table that stores one row per `(topic, week_start)`

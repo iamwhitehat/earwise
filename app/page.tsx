@@ -25,6 +25,7 @@ import {
 import { useScanCtx, useWatchlistCtx } from './_components/scan-provider'
 import { Icons, Spinner } from './_components/icons'
 import { STARTER_PRESETS } from '@/lib/use-watchlist'
+import { canonicalTopic } from '@/lib/topics'
 import type { WeekSnapshot } from '@/lib/snapshots'
 
 const TOP_N = 3
@@ -243,7 +244,7 @@ function DashboardView() {
   }, [])
 
   const filteredPosts = scan.selectedTopic
-    ? scan.posts.filter((p) => p.topic === scan.selectedTopic)
+    ? scan.posts.filter((p) => canonicalTopic(p.topic) === scan.selectedTopic)
     : scan.posts
 
   // Fresh Signals: latest non-other posts, sorted by newest.

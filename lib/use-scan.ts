@@ -20,6 +20,8 @@ import {
   DONE_FLASH_MS,
   LAST_SCAN_STORAGE_KEY,
 } from './scan-types'
+import { canonicalTopic } from './topics'
+import { dedupePosts } from './dedup'
 
 type FetchResult =
   | { sub: string; ok: true; nextAfter: string | null }
@@ -110,13 +112,17 @@ function flattenBuckets(buckets: Record<string, SubBucket>, order: string[]): Ta
 }
 
 function computeScanTrends(posts: TaggedPost[]): Trend[] {
+  // Dedupe crossposts, then group by canonical topic so plural/synonym
+  // variants collapse into one trend (consistent with /api/trends).
+  const deduped = dedupePosts(posts)
   const map = new Map<string, { count: number; subreddits: Set<string> }>()
-  for (const post of posts) {
-    if (!post.topic) continue
-    let entry = map.get(post.topic)
+  for (const post of deduped) {
+    const topic = canonicalTopic(post.topic)
+    if (!topic) continue
+    let entry = map.get(topic)
     if (!entry) {
       entry = { count: 0, subreddits: new Set() }
-      map.set(post.topic, entry)
+      map.set(topic, entry)
     }
     entry.count++
     entry.subreddits.add(post.subreddit)

@@ -16,6 +16,7 @@ import {
 import type { CommentQuote } from '@/lib/posts-client'
 import type { Direction, WeekSnapshot } from '@/lib/snapshots'
 import type { StarterPreset } from '@/lib/use-watchlist'
+import { canonicalTopic } from '@/lib/topics'
 import { toCsv, toMarkdown, downloadFile } from '@/lib/csv'
 import { Icons, Spinner, type SimpleIconProps } from './icons'
 import { useScanCtx, useWatchlistCtx } from './scan-provider'
@@ -2863,7 +2864,7 @@ function bucketByWeek(posts: TaggedPost[], weeks: number): number[] {
 }
 
 export function topicSparkline(posts: TaggedPost[], topic: string, weeks = 8): number[] {
-  const filtered = posts.filter((p) => p.topic === topic)
+  const filtered = posts.filter((p) => canonicalTopic(p.topic) === topic)
   return bucketByWeek(filtered, weeks)
 }
 
