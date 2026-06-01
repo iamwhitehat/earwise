@@ -342,6 +342,51 @@ create index if not exists strategy_runs_created_idx
 The Guide page surfaces a migration hint if these tables are absent rather than
 crashing.
 
+### 2b-quaterdecies. Migration for multi-source signals (Phase 3)
+
+Adds a `sources` registry and a unified `signals` table so demand from Reddit,
+Hacker News, and Stack Overflow lands in one place (with a `source` column),
+classified + canonical-topic'd + optionally embedded. Run once:
+
+```sql
+create table if not exists sources (
+  id text primary key,
+  kind text not null default 'connector',
+  enabled boolean not null default true,
+  config jsonb,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists signals (
+  id bigserial primary key,
+  source text not null,
+  external_id text not null,
+  title text not null default '',
+  body text,
+  author text not null default '',
+  url text not null default '',
+  category text,
+  topic text,
+  canonical_topic text,
+  confidence text,
+  score int,
+  num_comments int,
+  ratio numeric,
+  embedding jsonb,
+  created_at timestamptz,
+  ingested_at timestamptz not null default now(),
+  unique (source, external_id)
+);
+create index if not exists signals_canonical_idx
+  on signals (canonical_topic) where canonical_topic is not null;
+create index if not exists signals_source_idx on signals (source);
+```
+
+Ingestion is idempotent (deduped on `(source, external_id)`); each new signal
+is classified with Haiku, assigned a canonical topic, and embedded when
+`EMBEDDINGS_API_KEY` is set (see §1b). The Insights / dashboard pages tolerate
+the tables being absent — cross-source confirmation just shows Reddit only.
+
 ### 2c. Get the credentials
 
 1. Left sidebar → **Settings** → **API**.
