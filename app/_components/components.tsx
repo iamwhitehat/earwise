@@ -15,6 +15,7 @@ import {
 } from '@/lib/scan-types'
 import type { CommentQuote } from '@/lib/posts-client'
 import type { Direction, WeekSnapshot } from '@/lib/snapshots'
+import type { StarterPreset } from '@/lib/use-watchlist'
 import { toCsv, downloadCsv } from '@/lib/csv'
 import { Icons, Spinner, type SimpleIconProps } from './icons'
 import { useScanCtx, useWatchlistCtx } from './scan-provider'
@@ -254,12 +255,26 @@ export function FirstRunGuide({
   watchlist,
   onScan,
   scanning,
+  presets,
+  onApplyPreset,
 }: {
   watchlist: string[]
   onScan: () => void
   scanning: boolean
+  presets: readonly StarterPreset[]
+  onApplyPreset: (key: string) => void
 }) {
   const hasSubs = watchlist.length > 0
+  // Identify which preset (if any) currently matches the watchlist exactly,
+  // case-folded — used to disable the "active" preset button so a click
+  // doesn't redundantly re-set the same list.
+  const lowered = watchlist.map((s) => s.toLowerCase()).sort()
+  const activePresetKey = presets.find((p) => {
+    const lp = p.subs.map((s) => s.toLowerCase()).sort()
+    if (lp.length !== lowered.length) return false
+    return lp.every((s, i) => s === lowered[i])
+  })?.key
+
   return (
     <section className="first-run fade-in">
       <header className="first-run-head">
@@ -279,8 +294,8 @@ export function FirstRunGuide({
             <h3>Track subs that talk about your problem</h3>
             <p>
               {hasSubs
-                ? 'We pre-seeded a few founder-heavy subs to get you started — swap or add more anytime.'
-                : "Your watchlist is empty. Pick subs that mention the pains your product solves."}
+                ? 'We pre-seeded a few founder-heavy subs to get you started — swap to another preset or add more below.'
+                : "Your watchlist is empty. Pick a starter preset, ask the AI for niche-specific subs, or add your own."}
             </p>
             <div className="first-run-chips">
               {hasSubs ? (
@@ -293,6 +308,28 @@ export function FirstRunGuide({
               <a className="first-run-link" href="/explore">
                 Manage on Explore <Icons.chev size={11} />
               </a>
+            </div>
+            <div className="first-run-presets">
+              <span className="first-run-presets-label">Starter presets:</span>
+              {presets.map((p) => {
+                const isActive = p.key === activePresetKey
+                return (
+                  <button
+                    key={p.key}
+                    type="button"
+                    className={`first-run-preset${isActive ? ' active' : ''}`}
+                    onClick={() => onApplyPreset(p.key)}
+                    disabled={isActive}
+                    title={p.description}
+                  >
+                    {p.label}
+                    {isActive && <span className="first-run-preset-active">active</span>}
+                  </button>
+                )
+              })}
+            </div>
+            <div className="first-run-suggester">
+              <SubSuggester />
             </div>
           </div>
         </li>
