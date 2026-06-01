@@ -503,6 +503,71 @@ The `.next/standalone/` directory must stay next to the exe. Source edits are
 
 ---
 
+## 5. Scheduling (Phase 6 — autonomy)
+
+The scheduled job keeps data fresh and produces the weekly **State of your
+market** digest. It's a single endpoint:
+
+```
+POST /api/cron/run
+Body (all optional):
+  { "subreddits": ["SaaS"], "hackernews": ["dunning"], "stackoverflow": ["stripe webhooks"], "tier": "balanced" }
+```
+
+It ingests the configured sources, recomputes snapshots, re-materializes the
+Advantage-ranked opportunities, re-synthesizes insights, builds + stores a
+digest, and (optionally) emails it. Every step is best-effort.
+
+**Protect it.** Set a secret in `.env.local`:
+
+```
+CRON_SECRET=some-long-random-string
+```
+
+When set, callers must pass `Authorization: Bearer <CRON_SECRET>` (or
+`?key=<CRON_SECRET>`). Unset = open (fine for localhost only).
+
+**Wire a trigger** (pick one):
+
+- **Vercel Cron** — add to `vercel.json` and set `CRON_SECRET` in project env
+  (Vercel automatically sends the `Authorization: Bearer` header for cron):
+
+  ```json
+  { "crons": [{ "path": "/api/cron/run", "schedule": "0 13 * * 1" }] }
+  ```
+
+  (Mondays 13:00 UTC. Vercel cron sends GET by default — this route is POST;
+  use an external scheduler if you need POST, or add a GET handler. See note.)
+
+- **External scheduler** (cron-job.org, GitHub Actions, your own cron):
+
+  ```
+  curl -X POST https://YOUR_HOST/api/cron/run \
+    -H "Authorization: Bearer $CRON_SECRET" \
+    -H "content-type: application/json" \
+    -d '{"subreddits":["SaaS","startups"]}'
+  ```
+
+- **Manual** — hit `POST /api/digest/run` from the **Digest** page's
+  "Generate now" button anytime (builds the digest from current data without
+  scanning).
+
+**Optional email** of the digest — set these and the cron run will email it:
+
+```
+RESEND_API_KEY=re_...          # https://resend.com
+DIGEST_EMAIL_TO=you@example.com
+DIGEST_EMAIL_FROM=RedditRadar <onboarding@resend.dev>   # optional
+```
+
+Leave them unset and email is skipped silently.
+
+> Note: Vercel Cron issues GET requests. This route is POST so it can carry a
+> source config + stay auth-gated; trigger it from an external scheduler that
+> can POST, or add a thin GET wrapper if you specifically want Vercel Cron.
+
+---
+
 ## Troubleshooting
 
 | Symptom | Fix |

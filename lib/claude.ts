@@ -1184,6 +1184,57 @@ export async function synthesizeStrategy(
   return normalizeStrategy(input)
 }
 
+// ─── Weekly digest moves ──────────────────────────────────────────────────────
+
+const MOVES_SYSTEM_PROMPT = `You advise a founder on the 3 highest-leverage moves to make THIS week, given a snapshot of their market (top opportunities, accelerating trends, fresh high-intent leads).
+
+Return exactly 3 moves. Each: a concrete action (what to do this week) + a one-line why grounded in the snapshot. Reference specific opportunities/trends/leads. Respect any founder context provided. No fluff, no emojis, no markdown.`
+
+const MOVES_TOOL: StructuredTool = {
+  name: 'report_moves',
+  description: 'Return the 3 highest-leverage moves for this week.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      moves: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: { move: { type: 'string' }, why: { type: 'string' } },
+          required: ['move', 'why'],
+        },
+      },
+    },
+    required: ['moves'],
+  },
+}
+
+export type WeeklyMove = { move: string; why: string }
+
+/** Synthesize the 3 moves for the weekly digest. Returns [] if unusable. */
+export async function synthesizeWeeklyMoves(
+  contextText: string,
+  model: string = SYNTH_MODELS[DEFAULT_SYNTH_TIER],
+  memoryDigest = '',
+): Promise<WeeklyMove[]> {
+  if (!contextText.trim()) return []
+  const user = memoryDigest ? `${memoryDigest}\n\n${contextText}` : contextText
+  const input = await callStructured(model, MOVES_SYSTEM_PROMPT, user, MOVES_TOOL, 1200)
+  const arr = Array.isArray((input as Record<string, unknown> | null)?.moves)
+    ? ((input as Record<string, unknown>).moves as unknown[])
+    : []
+  const out: WeeklyMove[] = []
+  for (const m of arr) {
+    if (typeof m !== 'object' || m === null) continue
+    const mo = m as Record<string, unknown>
+    const move = str(mo.move, 240)
+    if (!move) continue
+    out.push({ move, why: str(mo.why, 240) })
+    if (out.length >= 3) break
+  }
+  return out
+}
+
 // ─── Draft reply to a high-intent signal ─────────────────────────────────────
 
 const DRAFT_REPLY_SYSTEM_PROMPT = `You write helpful, non-spammy replies to Reddit posts and comments.
