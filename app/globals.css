@@ -1078,6 +1078,139 @@ a.accent-link:focus-visible {
 }
 
 /* ============================================================
+   Leads pipeline board
+   ============================================================ */
+.leads-note {
+  padding: 9px 14px;
+  margin-bottom: var(--gap);
+  font-size: 12.5px;
+  color: var(--ink-2);
+  background: var(--accent-softer);
+  border-color: var(--accent-ring);
+}
+
+.leads-board {
+  display: flex;
+  gap: var(--gap);
+  align-items: flex-start;
+  overflow-x: auto;
+  padding-bottom: 10px;
+}
+
+.leads-col {
+  flex: 0 0 300px;
+  min-width: 300px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 140px);
+}
+.leads-col-head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 11px 13px;
+  border-bottom: 1px solid var(--border);
+}
+.leads-col-title {
+  font-size: 11.5px; font-weight: 600;
+  letter-spacing: 0.04em; text-transform: uppercase;
+  color: var(--ink-2);
+}
+/* Status accents mirror the funnel: cool → warm → win. */
+.leads-col-title.status-new       { color: var(--ink-3); }
+.leads-col-title.status-contacted { color: var(--feature); }
+.leads-col-title.status-replied   { color: var(--accent-text); }
+.leads-col-title.status-call      { color: var(--tool); }
+.leads-col-title.status-customer  { color: var(--score-high); }
+.leads-col-title.status-passed    { color: var(--ink-4); }
+.leads-col-count {
+  margin-left: auto;
+  font-size: 11px; color: var(--ink-4);
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 99px; padding: 1px 8px;
+}
+.leads-col-body {
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 10px; overflow-y: auto;
+}
+.leads-col-empty {
+  text-align: center; color: var(--ink-4);
+  font-size: 13px; padding: 14px 0;
+}
+
+.lead-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  box-shadow: var(--shadow-sm);
+  padding: 11px 12px;
+  display: flex; flex-direction: column; gap: 9px;
+}
+.lead-head { display: flex; align-items: center; gap: 8px; }
+.lead-author { font-size: 12.5px; font-weight: 550; color: var(--ink); }
+.lead-del {
+  margin-left: auto;
+  width: 22px; height: 22px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: var(--r-sm);
+  border: none; background: none; color: var(--ink-4);
+  transition: background .12s, color .12s;
+}
+.lead-del:hover { background: var(--pain-bg); color: var(--pain); }
+
+.lead-badges { display: flex; flex-wrap: wrap; gap: 5px; }
+
+.lead-excerpt {
+  font-size: 12.5px; line-height: 1.5; color: var(--ink-2);
+  margin: 0;
+  display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.lead-excerpt mark {
+  background: var(--accent-soft); color: var(--accent-text);
+  padding: 0 2px; border-radius: 3px;
+}
+
+.lead-opener {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 8px 10px;
+}
+.lead-opener-label {
+  font-size: 10px; font-weight: 600; letter-spacing: 0.04em;
+  text-transform: uppercase; color: var(--ink-4); margin-bottom: 4px;
+}
+.lead-opener-body { font-size: 12.5px; line-height: 1.5; color: var(--ink); white-space: pre-wrap; }
+.lead-opener-error { color: var(--pain); background: var(--pain-bg); border-color: var(--pain); font-size: 12px; }
+
+.lead-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.lead-foot { display: flex; align-items: center; gap: 8px; }
+.lead-status {
+  flex: 1;
+  font: inherit; font-size: 12px; font-weight: 500;
+  background: var(--surface); color: var(--ink);
+  border: 1px solid var(--border); border-radius: var(--r-sm);
+  padding: 4px 7px; outline: none;
+  transition: border-color .12s, box-shadow .12s;
+}
+.lead-status:focus { border-color: var(--accent-ring); box-shadow: 0 0 0 3px var(--accent-soft); }
+.lead-age { font-size: 11px; color: var(--ink-4); white-space: nowrap; }
+
+.lead-notes {
+  width: 100%;
+  font: inherit; font-size: 12px;
+  background: var(--surface); color: var(--ink);
+  border: 1px solid var(--border); border-radius: var(--r-sm);
+  padding: 6px 8px; resize: vertical; outline: none;
+  transition: border-color .12s, box-shadow .12s;
+}
+.lead-notes:focus { border-color: var(--accent-ring); box-shadow: 0 0 0 3px var(--accent-soft); }
+.lead-notes-saving { font-size: 10.5px; color: var(--ink-4); }
+
+/* ============================================================
    Reduced motion — honor OS-level vestibular-safety preference
    ============================================================ */
 @media (prefers-reduced-motion: reduce) {
