@@ -85,17 +85,18 @@ export function NavBar() {
       >
         <Icons.x size={16} />
       </button>
+      {/* earwise brand block — signal-burst mark (near-black on lime tile) + wordmark */}
       <Link href="/" className="brand" style={{ textDecoration: 'none' }}>
         <div className="brand-mark" aria-hidden="true">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2">
-            <circle cx="12" cy="12" r="9" opacity="0.55" />
-            <circle cx="12" cy="12" r="5" />
-            <circle cx="12" cy="12" r="1.6" fill="#fff" stroke="none" />
+          <svg width="18" height="18" viewBox="0 0 256 256">
+            <circle cx="96" cy="170" r="15" fill="#0E0F13" />
+            <path d="M135,170 A39,39 0 0 0 96,131" fill="none" stroke="#0E0F13" strokeWidth="18" strokeLinecap="round" />
+            <path d="M167,170 A71,71 0 0 0 96,99" fill="none" stroke="#0E0F13" strokeWidth="18" strokeLinecap="round" />
+            <path d="M199,170 A103,103 0 0 0 96,67" fill="none" stroke="#0E0F13" strokeWidth="18" strokeLinecap="round" />
           </svg>
         </div>
         <div className="brand-name">
-          <b>Reddit</b>
-          <span>Radar</span>
+          <b>earwise</b>
         </div>
       </Link>
 

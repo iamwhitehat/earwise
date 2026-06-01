@@ -1,13 +1,14 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import "./earwise-theme.css"; // earwise Signal-direction overrides — must come AFTER globals.css
 import { AppShell } from "./_components/app-shell";
 
-// Inline pre-paint script: applies the saved theme (or the OS preference if
-// the user hasn't picked one) to <html> BEFORE React hydrates, so the page
-// never paints a light-mode flash on top of a dark-mode preference. Kept in
-// a string so the layout stays a Server Component.
-const THEME_INIT_SCRIPT = `(function(){try{var t=localStorage.getItem('reddit-reader:theme');if(t==='dark'||(t==null&&window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches)){document.documentElement.setAttribute('data-theme','dark');}}catch(e){}})();`;
+// Inline pre-paint script: applies the saved theme to <html> BEFORE React
+// hydrates so the page never flashes the wrong theme. earwise is dark-first —
+// default to dark unless the user has explicitly chosen light. Kept in a string
+// so the layout stays a Server Component.
+const THEME_INIT_SCRIPT = `(function(){try{var t=localStorage.getItem('reddit-reader:theme');if(t!=='light'){document.documentElement.setAttribute('data-theme','dark');}}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();`;
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -20,8 +21,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "RedditRadar",
-  description: "Reddit signal — trends and opportunity scores across watched subs",
+  title: "earwise",
+  description: "Demand intelligence for founders. Find what the market is broadcasting — and the opening you can win.",
 };
 
 export default function RootLayout({
