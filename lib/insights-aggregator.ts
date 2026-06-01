@@ -4,6 +4,7 @@ import { fetchTopicSnapshots, computeDirection, type Direction } from './snapsho
 import { canonicalTopic } from './topics'
 import { dedupePosts } from './dedup'
 import { redditPermalink, type EvidenceRef } from './evidence'
+import { crossSourceConfirmation } from './sources/confirmation'
 
 const MAX_POSTS = 10_000
 const MAX_DEEP_POSTS = 2_000
@@ -29,6 +30,8 @@ export type OpportunityEvidence = {
   momentum: Direction
   weeklyCounts: number[]
   subreddits: string[]
+  /** Distinct sources confirming this topic (always includes 'reddit'). */
+  confirmedSources: string[]
   examples: EvidenceRef[]
 }
 
@@ -104,10 +107,13 @@ export async function aggregateInsights(
 
   const topTopics = computeTopTopics(posts)
   // Fetch snapshots once for the top topics; reused for both accelerator
-  // detection and per-opportunity momentum.
-  const snapshotsByTopic = await fetchSnapshotsSafe(db, topTopics.map((t) => t.topic))
+  // detection and per-opportunity momentum. Plus cross-source confirmation.
+  const [snapshotsByTopic, confirmation] = await Promise.all([
+    fetchSnapshotsSafe(db, topTopics.map((t) => t.topic)),
+    crossSourceConfirmation(db),
+  ])
   const acceleratingTopics = detectAcceleratingTopics(topTopics, snapshotsByTopic)
-  const opportunities = buildOpportunities(posts, deep, snapshotsByTopic)
+  const opportunities = buildOpportunities(posts, deep, snapshotsByTopic, confirmation)
 
   return {
     postCount: posts.length,
@@ -158,6 +164,7 @@ function buildOpportunities(
   posts: PostRow[],
   deep: DeepRow[],
   snapshotsByTopic: Record<string, number[]>,
+  confirmation: Record<string, string[]>,
 ): OpportunityEvidence[] {
   type Agg = {
     posts: PostRow[]
@@ -225,6 +232,11 @@ function buildOpportunities(
           postedAt: p.posted_at ? new Date(p.posted_at).getTime() : null,
         })
       }
+      // Opportunities come from Reddit posts, so 'reddit' is always present;
+      // union any other sources that confirm the same canonical topic.
+      const confirmedSources = Array.from(
+        new Set(['reddit', ...(confirmation[topic] ?? [])]),
+      ).sort()
       return {
         topic,
         posts: e.posts.length,
@@ -233,6 +245,7 @@ function buildOpportunities(
         momentum: computeDirection(snapshotsByTopic[topic] ?? []),
         weeklyCounts: snapshotsByTopic[topic] ?? [],
         subreddits: Array.from(e.subs).sort(),
+        confirmedSources,
         examples,
       }
     })
@@ -364,7 +377,8 @@ export function renderAggregatedForClaude(data: AggregatedInsightsData): string 
         `### ${o.topic} — demand: ${o.posts} posts, ${o.uniqueAuthors} unique authors, ` +
           `engagement ${o.engagement}; momentum: ${o.momentum}` +
           (o.weeklyCounts.length > 0 ? ` (weekly: ${o.weeklyCounts.join(' → ')})` : '') +
-          `; subs: ${o.subreddits.slice(0, 6).map((s) => `r/${s}`).join(', ')}`,
+          `; subs: ${o.subreddits.slice(0, 6).map((s) => `r/${s}`).join(', ')}` +
+          `; confirmed in ${o.confirmedSources.length} source(s): ${o.confirmedSources.join(', ')}`,
       )
       for (const ex of o.examples) {
         lines.push(`  - "${ex.quote}" — ${ex.url}`)

@@ -418,6 +418,20 @@ function InsightCardV2({ insight, index }: { insight: InsightV2; index: number }
             {insight.momentum}
           </span>
         )}
+        {insight.confirmedSources && insight.confirmedSources.length > 0 && (
+          <span
+            className="badge"
+            style={{
+              background: insight.confirmedSources.length >= 2 ? 'var(--score-high)' : 'var(--surface-2)',
+              color: insight.confirmedSources.length >= 2 ? '#fff' : 'var(--ink-2)',
+              border: insight.confirmedSources.length >= 2 ? 'none' : '1px solid var(--border)',
+            }}
+            title={`Confirmed in: ${insight.confirmedSources.join(', ')}`}
+          >
+            confirmed in {insight.confirmedSources.length} source
+            {insight.confirmedSources.length === 1 ? '' : 's'}
+          </span>
+        )}
       </div>
 
       {insight.problem && (

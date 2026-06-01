@@ -25,6 +25,8 @@ export type InsightV2 = {
   whatToBuild: string
   whyNow: string
   evidence: InsightEvidence[]
+  /** Distinct sources confirming this opportunity (e.g. reddit, hackernews). */
+  confirmedSources: string[]
   confidence: Confidence
 }
 

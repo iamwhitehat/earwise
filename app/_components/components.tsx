@@ -579,6 +579,7 @@ export function OpportunityCard({
   onSelect,
   insight,
   snapshots,
+  confirmedSources,
 }: {
   opp: Opportunity
   rank?: number
@@ -587,6 +588,8 @@ export function OpportunityCard({
   insight?: InsightState
   /** Last N weeks of snapshots for this topic, chronological. Drives the direction badge. */
   snapshots?: WeekSnapshot[]
+  /** Distinct sources confirming this topic (cross-source DETECT). */
+  confirmedSources?: string[]
 }) {
   return (
     <button
@@ -605,6 +608,15 @@ export function OpportunityCard({
             {opp.featureCount > 0 && <CategoryBadge cat="feature_request" count={opp.featureCount} />}
             {opp.toolCount > 0 && <CategoryBadge cat="tool_complaint" count={opp.toolCount} />}
             {snapshots && <DirectionBadge snapshots={snapshots} />}
+            {confirmedSources && confirmedSources.length >= 2 && (
+              <span
+                className="badge"
+                style={{ background: 'var(--score-high)', color: '#fff' }}
+                title={`Confirmed in: ${confirmedSources.join(', ')}`}
+              >
+                {confirmedSources.length} sources
+              </span>
+            )}
           </div>
           <div className="opp-subs">
             {opp.subreddits.map((s) => (

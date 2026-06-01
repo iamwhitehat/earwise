@@ -198,6 +198,24 @@ function DashboardView() {
       })
   }, [topTopics, topicSnapshots])
 
+  // Cross-source confirmation — canonical topic → distinct sources. Empty
+  // until the signals table exists; failures are non-fatal (Reddit-only).
+  const [confirmation, setConfirmation] = useState<Record<string, string[]>>({})
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/sources/confirmation')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json) => {
+        if (!cancelled && json?.confirmation) setConfirmation(json.confirmation as Record<string, string[]>)
+      })
+      .catch(() => {
+        /* signals table may be absent — Reddit-only view, non-fatal */
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   // Comment scan stats — small rollup for the compact CommentCoverage line.
   const [commentStats, setCommentStats] = useState<CommentStats | null>(null)
   const [commentStatsError, setCommentStatsError] = useState<string | null>(null)
@@ -384,6 +402,7 @@ function DashboardView() {
                     }
                     insight={insights[opp.topic]}
                     snapshots={topicSnapshots[opp.topic]}
+                    confirmedSources={confirmation[opp.topic]}
                   />
                 ))}
               </div>

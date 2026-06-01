@@ -566,9 +566,10 @@ For each insight:
 - whatToBuild: a concrete wedge product or feature someone could ship.
 - whyNow: why this is timely (momentum, switching, incumbent dissatisfaction).
 - evidence: 2-4 entries, each a VERBATIM quote from the provided lines and its EXACT permalink. Never invent a quote or a URL. Only use quotes + links that appear in the input.
-- confidence: high when many posts/authors triangulate, medium when the pattern is clear but thin, low when it's a stretch.
+- confirmedSources: copy the source list from the opportunity's "confirmed in N source(s)" line exactly.
+- confidence: weight cross-source confirmation heavily — high when demand triangulates AND it's confirmed in 2+ sources; medium when the pattern is clear but single-source or thin; low when it's a stretch.
 
-Do not invent opportunities, numbers, quotes, or links. If the evidence for an opportunity is too thin to support an insight, still emit it but set confidence to low.`
+Do not invent opportunities, numbers, quotes, links, or sources. If the evidence for an opportunity is too thin to support an insight, still emit it but set confidence to low.`
 
 const INSIGHT_V2_TOOL: StructuredTool = {
   name: 'report_opportunity_insights',
@@ -604,11 +605,12 @@ const INSIGHT_V2_TOOL: StructuredTool = {
                 required: ['quote', 'permalink'],
               },
             },
+            confirmedSources: { type: 'array', items: { type: 'string' } },
             confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
           },
           required: [
             'title', 'audience', 'problem', 'demand', 'momentum',
-            'whatToBuild', 'whyNow', 'evidence', 'confidence',
+            'whatToBuild', 'whyNow', 'evidence', 'confirmedSources', 'confidence',
           ],
         },
       },
@@ -679,6 +681,11 @@ function normalizeInsightsV2(raw: unknown): InsightV2[] {
       if (evidence.length >= 4) break
     }
     const conf = str(it.confidence, 10).toLowerCase() as Confidence
+    const confirmedSources = (Array.isArray(it.confirmedSources) ? it.confirmedSources : [])
+      .filter((s): s is string => typeof s === 'string')
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean)
+      .slice(0, 8)
     out.push({
       title,
       audience: str(it.audience, 160),
@@ -692,6 +699,7 @@ function normalizeInsightsV2(raw: unknown): InsightV2[] {
       whatToBuild: str(it.whatToBuild, 600),
       whyNow: str(it.whyNow, 600),
       evidence,
+      confirmedSources,
       confidence: VALID_CONFIDENCE.has(conf) ? conf : 'medium',
     })
     if (out.length >= 10) break
