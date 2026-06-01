@@ -1,9 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { NavBar } from "./_components/nav-bar";
-import { ScanProvider } from "./_components/scan-provider";
-import { SidebarBackdrop, SidebarProvider } from "./_components/sidebar-provider";
+import { AppShell } from "./_components/app-shell";
 
 // Inline pre-paint script: applies the saved theme (or the OS preference if
 // the user hasn't picked one) to <html> BEFORE React hydrates, so the page
@@ -44,15 +42,7 @@ export default function RootLayout({
         />
       </head>
       <body>
-        <ScanProvider>
-          <SidebarProvider>
-            <div className="app">
-              <NavBar />
-              <SidebarBackdrop />
-              <main className="main scroll">{children}</main>
-            </div>
-          </SidebarProvider>
-        </ScanProvider>
+        <AppShell>{children}</AppShell>
       </body>
     </html>
   );
