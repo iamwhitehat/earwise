@@ -9,6 +9,7 @@ import {
   CategoryGroups,
   CommentCoverage,
   AdvantageOpportunityCard,
+  AskBar,
   ErrorsBanner,
   ExportButtons,
   FirstRunGuide,
@@ -390,6 +391,8 @@ function DashboardView() {
             )}
           </div>
         )}
+
+        {!showFirstRunGuide && <AskBar />}
 
         {showFirstRunGuide ? (
           <FirstRunGuide

@@ -827,6 +827,108 @@ function AdvantageBreakdown({ opp }: { opp: MaterializedOpportunity }) {
   )
 }
 
+// ─── Ask-your-market command bar (Phase 8) ──────────────────────────────────
+
+type AskCitation = { n: number; title: string; url: string; subreddit: string; source: string }
+type AskResponse = { answer: string; citations: AskCitation[]; scanned: number }
+
+const ASK_EXAMPLES = [
+  'What are people most frustrated about?',
+  'Which tools do they complain about?',
+  'What would they pay for?',
+]
+
+/**
+ * Natural-language query over the indexed signals/posts. Posts to /api/ask and
+ * renders a grounded answer with citations back to the source threads.
+ */
+export function AskBar() {
+  const [query, setQuery] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [result, setResult] = useState<AskResponse | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  async function run(q: string) {
+    const question = q.trim()
+    if (question.length < 3 || loading) return
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/ask', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ query: question }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? `Error ${res.status}`)
+      setResult(json as AskResponse)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Ask failed')
+      setResult(null)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <section className="section">
+      <div className="ask-bar">
+        <Icons.compass size={16} />
+        <input
+          className="ask-input"
+          type="text"
+          value={query}
+          placeholder="Ask your market — e.g. what do people hate about current tools?"
+          disabled={loading}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              run(query)
+            }
+          }}
+        />
+        <button type="button" className="btn btn-primary btn-sm" onClick={() => run(query)} disabled={loading || query.trim().length < 3}>
+          {loading ? <><Spinner size={13} /> Asking…</> : 'Ask'}
+        </button>
+      </div>
+
+      {!result && !error && !loading && (
+        <div className="ask-examples">
+          {ASK_EXAMPLES.map((ex) => (
+            <button key={ex} type="button" className="ask-chip" onClick={() => { setQuery(ex); run(ex) }}>
+              {ex}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {error && (
+        <div className="card" style={{ padding: '12px 15px', marginTop: 10, color: 'var(--pain)', fontSize: 13 }}>
+          {error}
+        </div>
+      )}
+
+      {result && (
+        <div className="card ask-answer fade-in" style={{ padding: 'var(--pad)', marginTop: 10 }}>
+          <p className="ask-text">{result.answer}</p>
+          {result.citations.length > 0 && (
+            <div className="ask-cites">
+              {result.citations.map((c) => (
+                <a key={c.n} href={c.url} target="_blank" rel="noopener noreferrer" className="ask-cite" title={c.title}>
+                  <span className="ask-cite-n">{c.n}</span>
+                  {c.subreddit ? `r/${c.subreddit}` : c.source}
+                </a>
+              ))}
+            </div>
+          )}
+          <div className="ask-meta">grounded in {result.scanned} matching post{result.scanned === 1 ? '' : 's'}</div>
+        </div>
+      )}
+    </section>
+  )
+}
+
 // ─── What's-working panel (Phase 7 / LEARN) ──────────────────────────────────
 
 type ConversionRate = {

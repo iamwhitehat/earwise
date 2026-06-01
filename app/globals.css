@@ -1352,6 +1352,36 @@ a.accent-link:focus-visible {
 .ww-bar i { display: block; height: 100%; border-radius: 99px; background: var(--score-high); transition: width .4s cubic-bezier(.2,.8,.2,1); }
 .ww-rate { font-size: 11.5px; color: var(--ink-3); text-align: right; white-space: nowrap; }
 
+/* Ask-your-market command bar (Phase 8) */
+.ask-bar {
+  display: flex; align-items: center; gap: 9px;
+  padding: 8px 12px; border-radius: var(--r);
+  background: var(--surface); border: 1px solid var(--border);
+}
+.ask-bar > svg { color: var(--ink-4); flex-shrink: 0; }
+.ask-input { flex: 1; min-width: 0; background: none; border: none; outline: none; color: var(--ink); font: inherit; font-size: 14px; }
+.ask-input::placeholder { color: var(--ink-4); }
+.ask-examples { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 9px; }
+.ask-chip {
+  padding: 4px 11px; border-radius: 99px; cursor: pointer; font: inherit; font-size: 12px;
+  background: var(--surface-2); border: 1px solid var(--border); color: var(--ink-3);
+}
+.ask-chip:hover { border-color: var(--accent); color: var(--accent-text); }
+.ask-text { margin: 0; font-size: 14px; line-height: 1.6; color: var(--ink); white-space: pre-wrap; }
+.ask-cites { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }
+.ask-cite {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 9px 3px 4px; border-radius: 99px; text-decoration: none;
+  background: var(--surface-2); border: 1px solid var(--border); color: var(--ink-2); font-size: 11.5px;
+}
+.ask-cite:hover { border-color: var(--accent); color: var(--accent-text); }
+.ask-cite-n {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 16px; height: 16px; border-radius: 99px; background: var(--accent-soft); color: var(--accent-text);
+  font-size: 10px; font-weight: 700;
+}
+.ask-meta { margin-top: 10px; font-size: 11px; color: var(--ink-4); }
+
 /* Onboarding wizard (Phase 8) */
 .wiz { max-width: 640px; margin: 0 auto; padding: 32px 0; }
 .wiz-steps { display: flex; gap: 8px; justify-content: center; margin-bottom: 22px; }
