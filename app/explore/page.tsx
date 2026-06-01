@@ -31,12 +31,14 @@ function ExploreView() {
   const router = useRouter()
   const sp = useSearchParams()
 
-  // URL is the source of truth. Two mutually-exclusive params:
+  // URL is the source of truth. Params:
   //   ?topic=foo         — selected scan-trends topic
-  //   ?allTimeTopic=foo  — selected all-time topic
-  // Both survive refresh and round-trip browser back/forward.
+  //   ?allTimeTopic=foo  — selected all-time topic (mut-ex with topic)
+  //   ?trendsTab=all     — Trends panel viewing the all-time list
+  // Default trendsTab is 'scan'; omitted from URL when default.
   const urlTopic = sp.get('topic')
   const urlAllTimeTopic = sp.get('allTimeTopic')
+  const urlTrendsTab = sp.get('trendsTab') === 'all' ? 'all' : 'scan'
 
   // Applies a scan-trends topic: updates URL and context atomically, and
   // clears the all-time param since they're mutually exclusive.
@@ -50,6 +52,19 @@ function ExploreView() {
       } else {
         next.delete('topic')
       }
+      const qs = next.toString()
+      router.replace(qs ? `/explore?${qs}` : '/explore', { scroll: false })
+    },
+    [router, sp, scan],
+  )
+
+  // Trends-tab writer: URL + context, atomic.
+  const applyTrendsTab = useCallback(
+    (tab: 'scan' | 'all') => {
+      scan.setTrendsTab(tab)
+      const next = new URLSearchParams(sp.toString())
+      if (tab === 'all') next.set('trendsTab', 'all')
+      else next.delete('trendsTab')
       const qs = next.toString()
       router.replace(qs ? `/explore?${qs}` : '/explore', { scroll: false })
     },
@@ -85,6 +100,10 @@ function ExploreView() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [urlAllTimeTopic])
+  useEffect(() => {
+    if (urlTrendsTab !== scan.trendsTab) scan.setTrendsTab(urlTrendsTab)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlTrendsTab])
 
   useDropStaleScanTopic(scan.selectedTopic, scan.scanTrends, applyTopic)
 
@@ -133,7 +152,7 @@ function ExploreView() {
             selectedTopic={scan.selectedTopic}
             onSelectTopic={applyTopic}
             tab={scan.trendsTab}
-            onTabChange={scan.setTrendsTab}
+            onTabChange={applyTrendsTab}
             allTimeTrends={scan.allTimeTrends}
             allTimeLoading={scan.allTimeLoading}
             allTimeError={scan.allTimeError}
