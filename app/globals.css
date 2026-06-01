@@ -83,6 +83,28 @@ body {
 .mono { font-family: var(--font-geist-mono), 'Geist Mono', ui-monospace, monospace; }
 .tnum { font-variant-numeric: tabular-nums; }
 
+/* ──── Typography utility classes ─────────────────────────────────────────────
+   Targets the most-repeated inline-style combinations (small font sizes +
+   muted ink color + margin reset) so empty/placeholder/caption text doesn't
+   need scattered `style={{ fontSize: 12.5, color: 'var(--ink-4)' }}` calls. */
+.t-xs    { font-size: 11px; }
+.t-sm    { font-size: 11.5px; }
+.t-md    { font-size: 12px; }
+.t-mdp   { font-size: 12.5px; }
+.t-lg    { font-size: 13px; }
+.t-lgp   { font-size: 13.5px; }
+.ink     { color: var(--ink); }
+.ink-2   { color: var(--ink-2); }
+.ink-3   { color: var(--ink-3); }
+.ink-4   { color: var(--ink-4); }
+.ink-pain    { color: var(--pain); }
+.ink-feature { color: var(--feature); }
+.ink-tool    { color: var(--tool); }
+.fw-5    { font-weight: 500; }
+.fw-6    { font-weight: 600; }
+.m-0     { margin: 0; }
+.mb-0    { margin-bottom: 0; }
+
 button { font-family: inherit; cursor: pointer; }
 a { color: inherit; text-decoration: none; }
 

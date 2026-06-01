@@ -900,7 +900,7 @@ export function WatchlistEditor({
             </span>
           ))}
         {hydrated && watchlist.length === 0 && (
-          <span style={{ fontSize: 12, color: 'var(--ink-4)' }}>No subs yet.</span>
+          <span className="t-md ink-4">No subs yet.</span>
         )}
       </div>
     </div>
@@ -1073,7 +1073,7 @@ function ReadOnlyChipColumn({
         {label}
       </div>
       {items.length === 0 ? (
-        <p style={{ fontSize: 12.5, color: 'var(--ink-4)', margin: 0 }}>—</p>
+        <p className="t-mdp ink-4 m-0">—</p>
       ) : (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
           {items.map((item) => (
@@ -1414,7 +1414,7 @@ function ChipCloud({
         {label}
       </div>
       {items.length === 0 ? (
-        <p style={{ fontSize: 12.5, color: 'var(--ink-4)', margin: 0 }}>{emptyText}</p>
+        <p className="t-mdp ink-4 m-0">{emptyText}</p>
       ) : (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
           {items.map((item) => {
@@ -1505,7 +1505,7 @@ function StackedChipSection({
         >
           {label}
         </h3>
-        <span className="tnum" style={{ fontSize: 12, color: 'var(--ink-4)' }}>
+        <span className="tnum t-md ink-4">
           {items.length} item{items.length === 1 ? '' : 's'}
         </span>
         {renderCopy && items.length > 0 && (
@@ -1513,7 +1513,7 @@ function StackedChipSection({
         )}
       </div>
       {items.length === 0 ? (
-        <p style={{ fontSize: 12.5, color: 'var(--ink-4)', margin: 0 }}>{emptyText}</p>
+        <p className="t-mdp ink-4 m-0">{emptyText}</p>
       ) : (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
           {items.map((item) => {
@@ -1633,7 +1633,7 @@ function BuyerLanguageMatches({
           appears
         </h3>
         {matches && (
-          <span style={{ fontSize: 12, color: 'var(--ink-4)' }}>
+          <span className="t-md ink-4">
             · {matches.length} match{matches.length === 1 ? '' : 'es'}
           </span>
         )}
@@ -1656,7 +1656,7 @@ function BuyerLanguageMatches({
         <p style={{ color: 'var(--pain)', fontSize: 12.5, margin: 0 }}>{error}</p>
       )}
       {!loading && !error && matches && matches.length === 0 && (
-        <p style={{ fontSize: 12.5, color: 'var(--ink-4)', margin: 0 }}>
+        <p className="t-mdp ink-4 m-0">
           No matches found in posts or comments. The phrase may have come from a
           truncated snippet in the Claude extraction.
         </p>
@@ -1851,7 +1851,7 @@ export function SubSuggester() {
             )}
           </div>
           {suggestions.length === 0 ? (
-            <p style={{ fontSize: 12.5, color: 'var(--ink-3)', margin: 0 }}>
+            <p className="t-mdp ink-3 m-0">
               No suggestions returned. Try a more specific niche.
             </p>
           ) : (
@@ -2539,7 +2539,7 @@ export function VolumeCard({ posts }: { posts: TaggedPost[] }) {
           <div className="tnum" style={{ fontSize: 24, fontWeight: 700, letterSpacing: '-0.02em' }}>
             {total}
           </div>
-          <div style={{ fontSize: 11.5, color: 'var(--ink-3)' }}>signals · 8 weeks</div>
+          <div className="t-sm ink-3">signals · 8 weeks</div>
         </div>
         <span
           className="badge"
