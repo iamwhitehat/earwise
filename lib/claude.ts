@@ -3,13 +3,21 @@ import 'server-only'
 import Anthropic from '@anthropic-ai/sdk'
 import { type Category } from './categories'
 import {
+  parseClassification,
+  normalizeTopic,
+  type Confidence,
+  type Classification,
+} from './classify-parse'
+import {
   OPENER_SYSTEM_PROMPT,
   buildOpenerUserContent,
   cleanOpenerText,
   type OpenerInput,
 } from './opener'
+import type { InsightV2, InsightEvidence } from './insight-types'
 
 export type { Category }
+export type { InsightV2 }
 
 const VALID: ReadonlySet<Category> = new Set([
   'pain_point',
@@ -142,7 +150,7 @@ export async function callStructured<T = unknown>(
   }
 }
 
-export type Confidence = 'high' | 'medium' | 'low'
+export type { Confidence, Classification }
 
 export type ClassificationExample = {
   title: string
@@ -150,8 +158,6 @@ export type ClassificationExample = {
 }
 
 export type ExampleSet = Record<Category, ClassificationExample[]>
-
-export type Classification = { category: Category; confidence: Confidence }
 
 const VALID_CONFIDENCE: ReadonlySet<Confidence> = new Set(['high', 'medium', 'low'])
 
@@ -188,31 +194,6 @@ function renderExamples(examples: ExampleSet): string {
   }
   if (blocks.length === 0) return ''
   return `\n\nReference examples from previously-classified posts:\n\n${blocks.join('\n\n')}`
-}
-
-function parseClassification(text: string): Classification {
-  const tryParse = (raw: string): Classification | null => {
-    try {
-      const parsed = JSON.parse(raw) as unknown
-      if (typeof parsed !== 'object' || parsed === null) return null
-      const obj = parsed as Record<string, unknown>
-      const cat = typeof obj.category === 'string' ? (obj.category.trim().toLowerCase() as Category) : null
-      const conf = typeof obj.confidence === 'string' ? (obj.confidence.trim().toLowerCase() as Confidence) : null
-      const category = cat && VALID.has(cat) ? cat : 'other'
-      const confidence = conf && VALID_CONFIDENCE.has(conf) ? conf : 'medium'
-      return { category, confidence }
-    } catch {
-      return null
-    }
-  }
-  const direct = tryParse(text.trim())
-  if (direct) return direct
-  const m = text.match(/\{[\s\S]*\}/)
-  if (m) {
-    const obj = tryParse(m[0])
-    if (obj) return obj
-  }
-  return { category: 'other', confidence: 'medium' }
 }
 
 export async function classifyPost(
@@ -254,20 +235,6 @@ Rules:
 If a label from the "Known topics" list (provided in the user message) fits, reuse it exactly. Otherwise coin a new short label that follows the same shape.
 
 Reply with only the topic label.`
-
-function normalizeTopic(raw: string): string | null {
-  const cleaned = raw
-    .trim()
-    .toLowerCase()
-    .replace(/[.,;:!?'"`()[\]{}]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-  if (!cleaned) return null
-  const words = cleaned.split(' ')
-  if (words.length < 1 || words.length > 6) return null
-  if (cleaned.length > 60) return null
-  return cleaned
-}
 
 export async function extractTopic(
   title: string,
@@ -576,6 +543,220 @@ export async function synthesizeKnowledgeInsights(
     2000,
   )
   return normalizeKnowledgeInsights(input)
+}
+
+// ─── Insights v2 (decision-grade, cited, critiqued) ──────────────────────────
+
+const INSIGHTS_V2_SYSTEM_PROMPT = `You are a market analyst producing decision-grade opportunity briefs from Reddit signal.
+
+You are given a list of TOP OPPORTUNITIES, each with real demand numbers and concrete evidence lines (a quote followed by its permalink). Write ONE insight per opportunity, in the same order, using ONLY the supplied data.
+
+For each insight:
+- title: a crisp, specific opportunity name (not a generic phrase).
+- audience: who has this problem (specific role / segment).
+- problem: the pain in one or two sentences, in the users' own framing.
+- demand: copy the EXACT posts / uniqueAuthors / engagement numbers given for that opportunity.
+- momentum: restate the momentum word + the weekly trajectory if shown.
+- whatToBuild: a concrete wedge product or feature someone could ship.
+- whyNow: why this is timely (momentum, switching, incumbent dissatisfaction).
+- evidence: 2-4 entries, each a VERBATIM quote from the provided lines and its EXACT permalink. Never invent a quote or a URL. Only use quotes + links that appear in the input.
+- confidence: high when many posts/authors triangulate, medium when the pattern is clear but thin, low when it's a stretch.
+
+Do not invent opportunities, numbers, quotes, or links. If the evidence for an opportunity is too thin to support an insight, still emit it but set confidence to low.`
+
+const INSIGHT_V2_TOOL: StructuredTool = {
+  name: 'report_opportunity_insights',
+  description: 'Return one decision-grade insight per supplied opportunity.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      insights: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            title: { type: 'string' },
+            audience: { type: 'string' },
+            problem: { type: 'string' },
+            demand: {
+              type: 'object',
+              properties: {
+                posts: { type: 'integer' },
+                uniqueAuthors: { type: 'integer' },
+                engagement: { type: 'integer' },
+              },
+              required: ['posts', 'uniqueAuthors', 'engagement'],
+            },
+            momentum: { type: 'string' },
+            whatToBuild: { type: 'string' },
+            whyNow: { type: 'string' },
+            evidence: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: { quote: { type: 'string' }, permalink: { type: 'string' } },
+                required: ['quote', 'permalink'],
+              },
+            },
+            confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
+          },
+          required: [
+            'title', 'audience', 'problem', 'demand', 'momentum',
+            'whatToBuild', 'whyNow', 'evidence', 'confidence',
+          ],
+        },
+      },
+    },
+    required: ['insights'],
+  },
+}
+
+const CRITIQUE_SYSTEM_PROMPT = `You are a skeptical editor reviewing draft opportunity insights for a founder.
+
+For each draft you receive (numbered), decide:
+- keep: false if it's vague, generic, duplicative, or its evidence doesn't actually support the claim (a likely hallucination). keep: true otherwise.
+- confidence: recalibrate to high/medium/low based ONLY on how well the cited evidence + demand numbers support the insight. Be conservative — most should be medium or low unless the triangulation is strong.
+
+Return one entry per draft, in order, by its 1-based index. Do not rewrite the insights; only judge them.`
+
+const CRITIQUE_TOOL: StructuredTool = {
+  name: 'report_critique',
+  description: 'Keep/drop + recalibrated confidence for each draft insight.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      verdicts: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            index: { type: 'integer' },
+            keep: { type: 'boolean' },
+            confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
+          },
+          required: ['index', 'keep', 'confidence'],
+        },
+      },
+    },
+    required: ['verdicts'],
+  },
+}
+
+function str(v: unknown, max: number): string {
+  return typeof v === 'string' ? v.trim().slice(0, max) : ''
+}
+function int(v: unknown): number {
+  return typeof v === 'number' && Number.isFinite(v) ? Math.max(0, Math.floor(v)) : 0
+}
+
+function normalizeInsightsV2(raw: unknown): InsightV2[] {
+  if (typeof raw !== 'object' || raw === null) return []
+  const arr = Array.isArray((raw as Record<string, unknown>).insights)
+    ? ((raw as Record<string, unknown>).insights as unknown[])
+    : []
+  const out: InsightV2[] = []
+  for (const item of arr) {
+    if (typeof item !== 'object' || item === null) continue
+    const it = item as Record<string, unknown>
+    const title = str(it.title, 140)
+    if (!title) continue
+    const d = (it.demand ?? {}) as Record<string, unknown>
+    const evidenceRaw = Array.isArray(it.evidence) ? it.evidence : []
+    const evidence: InsightEvidence[] = []
+    for (const e of evidenceRaw) {
+      if (typeof e !== 'object' || e === null) continue
+      const eo = e as Record<string, unknown>
+      const quote = str(eo.quote, 280)
+      const permalink = str(eo.permalink, 400)
+      if (!quote) continue
+      evidence.push({ quote, permalink })
+      if (evidence.length >= 4) break
+    }
+    const conf = str(it.confidence, 10).toLowerCase() as Confidence
+    out.push({
+      title,
+      audience: str(it.audience, 160),
+      problem: str(it.problem, 600),
+      demand: {
+        posts: int(d.posts),
+        uniqueAuthors: int(d.uniqueAuthors),
+        engagement: int(d.engagement),
+      },
+      momentum: str(it.momentum, 200),
+      whatToBuild: str(it.whatToBuild, 600),
+      whyNow: str(it.whyNow, 600),
+      evidence,
+      confidence: VALID_CONFIDENCE.has(conf) ? conf : 'medium',
+    })
+    if (out.length >= 10) break
+  }
+  return out
+}
+
+/**
+ * Insights v2: synthesize one cited, decision-grade insight per opportunity,
+ * then run a critique pass that drops weak/hallucinated insights and
+ * recalibrates confidence. Both passes use schema-enforced tool use.
+ */
+export async function synthesizeInsightsV2(
+  aggregatedText: string,
+  model: string = SYNTH_MODELS[DEFAULT_SYNTH_TIER],
+): Promise<InsightV2[]> {
+  const draftInput = await callStructured(
+    model,
+    INSIGHTS_V2_SYSTEM_PROMPT,
+    aggregatedText,
+    INSIGHT_V2_TOOL,
+    4000,
+  )
+  const drafts = normalizeInsightsV2(draftInput)
+  if (drafts.length === 0) return []
+
+  // Critique / rank pass — drop weak ones, recalibrate confidence.
+  const critiqueUser = drafts
+    .map((d, i) => {
+      const ev = d.evidence.map((e) => `    • "${e.quote}" (${e.permalink})`).join('\n')
+      return (
+        `#${i + 1} ${d.title}\n` +
+        `  audience: ${d.audience}\n` +
+        `  problem: ${d.problem}\n` +
+        `  demand: ${d.demand.posts} posts, ${d.demand.uniqueAuthors} authors, engagement ${d.demand.engagement}\n` +
+        `  whatToBuild: ${d.whatToBuild}\n` +
+        `  evidence:\n${ev || '    (none)'}`
+      )
+    })
+    .join('\n\n')
+
+  const verdictInput = await callStructured(
+    model,
+    CRITIQUE_SYSTEM_PROMPT,
+    critiqueUser,
+    CRITIQUE_TOOL,
+    1500,
+  )
+  const verdicts = Array.isArray((verdictInput as Record<string, unknown> | null)?.verdicts)
+    ? ((verdictInput as Record<string, unknown>).verdicts as unknown[])
+    : []
+
+  if (verdicts.length === 0) return drafts // critique unavailable → keep drafts
+
+  const byIndex = new Map<number, { keep: boolean; confidence: Confidence }>()
+  for (const v of verdicts) {
+    if (typeof v !== 'object' || v === null) continue
+    const vo = v as Record<string, unknown>
+    const idx = int(vo.index)
+    const keep = vo.keep !== false
+    const conf = str(vo.confidence, 10).toLowerCase() as Confidence
+    byIndex.set(idx, { keep, confidence: VALID_CONFIDENCE.has(conf) ? conf : 'medium' })
+  }
+
+  const kept: InsightV2[] = []
+  drafts.forEach((d, i) => {
+    const verdict = byIndex.get(i + 1)
+    if (verdict && !verdict.keep) return
+    kept.push(verdict ? { ...d, confidence: verdict.confidence } : d)
+  })
+  return kept
 }
 
 // ─── Buyer Language extraction ────────────────────────────────────────────────

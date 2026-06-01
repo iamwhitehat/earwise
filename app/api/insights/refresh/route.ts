@@ -1,7 +1,10 @@
 import type { NextRequest } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
-import { synthesizeKnowledgeInsights, resolveSynthModel } from '@/lib/claude'
+import { synthesizeInsightsV2, resolveSynthModel } from '@/lib/claude'
 import { aggregateInsights, renderAggregatedForClaude } from '@/lib/insights-aggregator'
+
+// Bump when the synthesis prompt/schema changes, so stored runs are traceable.
+const INSIGHTS_PROMPT_VERSION = 'insights-v2'
 
 // POST /api/insights/refresh — runs the cross-signal aggregation, calls
 // Claude to synthesize insights, INSERTs a new row into knowledge_insights,
@@ -48,7 +51,7 @@ export async function POST(req: NextRequest) {
   }
 
   const rendered = renderAggregatedForClaude(aggregated)
-  const insights = await synthesizeKnowledgeInsights(rendered, model)
+  const insights = await synthesizeInsightsV2(rendered, model)
 
   if (insights.length === 0) {
     return Response.json(
@@ -63,6 +66,8 @@ export async function POST(req: NextRequest) {
     postCount: aggregated.postCount,
     deepScanCount: aggregated.deepScanCount,
     topTopics: aggregated.topTopics.slice(0, 10),
+    model,
+    promptVersion: INSIGHTS_PROMPT_VERSION,
   }
 
   const { data, error } = await db

@@ -12,6 +12,25 @@ const TOP_PAIRS = 15
 const TOP_TOOLS = 20
 const TOOL_TOPICS_CAP = 5
 const SWITCH_QUOTES_CAP = 30
+// Insights v2: how many top opportunities get full evidence retrieval, and how
+// many concrete evidence examples to attach to each.
+const TOP_OPPORTUNITIES = 8
+const EXAMPLES_PER_OPP = 5
+
+/**
+ * Per-opportunity evidence pack (Insights v2). Real demand metrics plus a
+ * handful of concrete, link-backed examples the synthesis must cite.
+ */
+export type OpportunityEvidence = {
+  topic: string
+  posts: number
+  uniqueAuthors: number
+  engagement: number // sum of sampled comment counts across the topic's posts
+  momentum: Direction
+  weeklyCounts: number[]
+  subreddits: string[]
+  examples: EvidenceRef[]
+}
 
 export type AggregatedInsightsData = {
   postCount: number
@@ -28,6 +47,8 @@ export type AggregatedInsightsData = {
   // signals. Computed from trend_snapshots, included in the Claude prompt so
   // the synthesis can highlight them.
   acceleratingTopics: Array<{ topic: string; weeklyCounts: number[]; direction: Direction }>
+  // Insights v2: evidence-rich packs for the top opportunities.
+  opportunities: OpportunityEvidence[]
 }
 
 type PostRow = {
@@ -37,6 +58,8 @@ type PostRow = {
   topic: string | null
   title: string
   author: string
+  num_comments: number | null
+  posted_at: string | null
 }
 
 type DeepRow = {
@@ -60,7 +83,7 @@ export async function aggregateInsights(
   const [postsRes, deepRes] = await Promise.all([
     db
       .from('posts')
-      .select('post_id, subreddit, category, topic, title, author')
+      .select('post_id, subreddit, category, topic, title, author, num_comments, posted_at')
       .neq('category', 'other')
       .order('analyzed_at', { ascending: false })
       .limit(MAX_POSTS),
@@ -80,12 +103,11 @@ export async function aggregateInsights(
   const deep = (deepRes.data ?? []) as DeepRow[]
 
   const topTopics = computeTopTopics(posts)
-  // Fetch snapshots for the top topics so the synthesis can flag accelerators.
-  // Pull the last 8 weeks; computeDirection only needs the trailing 3.
-  const acceleratingTopics = await detectAcceleratingTopics(
-    db,
-    topTopics.map((t) => t.topic),
-  )
+  // Fetch snapshots once for the top topics; reused for both accelerator
+  // detection and per-opportunity momentum.
+  const snapshotsByTopic = await fetchSnapshotsSafe(db, topTopics.map((t) => t.topic))
+  const acceleratingTopics = detectAcceleratingTopics(topTopics, snapshotsByTopic)
+  const opportunities = buildOpportunities(posts, deep, snapshotsByTopic)
 
   return {
     postCount: posts.length,
@@ -95,30 +117,125 @@ export async function aggregateInsights(
     topTools: computeTopTools(deep),
     switchQuotes: collectSwitchQuotes(deep),
     acceleratingTopics,
+    opportunities,
   }
 }
 
-async function detectAcceleratingTopics(
+async function fetchSnapshotsSafe(
   db: SupabaseClient,
   topics: string[],
-): Promise<AggregatedInsightsData['acceleratingTopics']> {
-  if (topics.length === 0) return []
+): Promise<Record<string, number[]>> {
+  if (topics.length === 0) return {}
   try {
     const map = await fetchTopicSnapshots(db, topics, 8)
-    const out: AggregatedInsightsData['acceleratingTopics'] = []
-    for (const topic of topics) {
-      const snaps = map[topic] ?? []
-      const counts = snaps.map((s) => s.postCount)
-      const dir = computeDirection(counts)
-      if (dir === 'accelerating') out.push({ topic, weeklyCounts: counts, direction: dir })
-    }
+    const out: Record<string, number[]> = {}
+    for (const topic of topics) out[topic] = (map[topic] ?? []).map((s) => s.postCount)
     return out
   } catch (err) {
-    // Snapshots table may not exist yet — degrade gracefully, the rest of
-    // the synthesis still works.
-    console.warn('[insights] detectAcceleratingTopics failed:', err)
-    return []
+    // Snapshots table may not exist yet — degrade gracefully.
+    console.warn('[insights] snapshot fetch failed:', err)
+    return {}
   }
+}
+
+function detectAcceleratingTopics(
+  topTopics: Array<{ topic: string }>,
+  snapshotsByTopic: Record<string, number[]>,
+): AggregatedInsightsData['acceleratingTopics'] {
+  const out: AggregatedInsightsData['acceleratingTopics'] = []
+  for (const { topic } of topTopics) {
+    const counts = snapshotsByTopic[topic] ?? []
+    const dir = computeDirection(counts)
+    if (dir === 'accelerating') out.push({ topic, weeklyCounts: counts, direction: dir })
+  }
+  return out
+}
+
+// Build evidence-rich packs for the top opportunities: demand metrics computed
+// from the (deduped) post set + concrete examples (recent post titles and the
+// strongest deep-scan quotes) each carrying a real permalink.
+function buildOpportunities(
+  posts: PostRow[],
+  deep: DeepRow[],
+  snapshotsByTopic: Record<string, number[]>,
+): OpportunityEvidence[] {
+  type Agg = {
+    posts: PostRow[]
+    authors: Set<string>
+    subs: Set<string>
+    engagement: number
+  }
+  const byTopic = new Map<string, Agg>()
+  for (const p of posts) {
+    const topic = canonicalTopic(p.topic)
+    if (!topic) continue
+    let e = byTopic.get(topic)
+    if (!e) {
+      e = { posts: [], authors: new Set(), subs: new Set(), engagement: 0 }
+      byTopic.set(topic, e)
+    }
+    e.posts.push(p)
+    if (p.author) e.authors.add(p.author.toLowerCase())
+    e.subs.add(p.subreddit)
+    if (typeof p.num_comments === 'number') e.engagement += p.num_comments
+  }
+
+  // Map canonical topic -> a couple of strong deep-scan quotes (with links).
+  const deepQuotesByTopic = new Map<string, EvidenceRef[]>()
+  for (const d of deep) {
+    const topic = canonicalTopic(d.topic)
+    if (!topic || !Array.isArray(d.quotes)) continue
+    const list = deepQuotesByTopic.get(topic) ?? []
+    if (list.length >= 2) continue
+    for (const raw of d.quotes as RawQuote[]) {
+      if (!raw || typeof raw.text !== 'string') continue
+      const text = raw.text.trim()
+      if (!text) continue
+      list.push({
+        quote: text,
+        url: redditPermalink(d.subreddit, d.post_id),
+        source: 'reddit',
+        subreddit: d.subreddit,
+        postedAt: d.posted_at ? new Date(d.posted_at).getTime() : null,
+      })
+      if (list.length >= 2) break
+    }
+    deepQuotesByTopic.set(topic, list)
+  }
+
+  return Array.from(byTopic.entries())
+    .sort((a, b) => b[1].posts.length - a[1].posts.length)
+    .slice(0, TOP_OPPORTUNITIES)
+    .map(([topic, e]) => {
+      const examples: EvidenceRef[] = []
+      // Strongest deep-scan quotes first, then recent post titles to fill.
+      for (const q of deepQuotesByTopic.get(topic) ?? []) {
+        if (examples.length >= EXAMPLES_PER_OPP) break
+        examples.push(q)
+      }
+      for (const p of e.posts) {
+        if (examples.length >= EXAMPLES_PER_OPP) break
+        const title = (p.title ?? '').trim()
+        if (!title) continue
+        examples.push({
+          quote: title,
+          url: redditPermalink(p.subreddit, p.post_id),
+          source: 'reddit',
+          subreddit: p.subreddit,
+          postedAt: p.posted_at ? new Date(p.posted_at).getTime() : null,
+        })
+      }
+      return {
+        topic,
+        posts: e.posts.length,
+        uniqueAuthors: e.authors.size,
+        engagement: e.engagement,
+        momentum: computeDirection(snapshotsByTopic[topic] ?? []),
+        weeklyCounts: snapshotsByTopic[topic] ?? [],
+        subreddits: Array.from(e.subs).sort(),
+        examples,
+      }
+    })
 }
 
 function computeTopTopics(posts: PostRow[]) {
@@ -237,6 +354,24 @@ export function renderAggregatedForClaude(data: AggregatedInsightsData): string 
   lines.push(`${data.postCount} classified posts (excluding 'other') analyzed.`)
   lines.push(`${data.deepScanCount} posts deep-scanned for comment-level signals.`)
   lines.push('')
+
+  if (data.opportunities.length > 0) {
+    lines.push('TOP OPPORTUNITIES — write one insight per opportunity below.')
+    lines.push('Cite these exact numbers in `demand` and quote the evidence with its permalink.')
+    lines.push('')
+    for (const o of data.opportunities) {
+      lines.push(
+        `### ${o.topic} — demand: ${o.posts} posts, ${o.uniqueAuthors} unique authors, ` +
+          `engagement ${o.engagement}; momentum: ${o.momentum}` +
+          (o.weeklyCounts.length > 0 ? ` (weekly: ${o.weeklyCounts.join(' → ')})` : '') +
+          `; subs: ${o.subreddits.slice(0, 6).map((s) => `r/${s}`).join(', ')}`,
+      )
+      for (const ex of o.examples) {
+        lines.push(`  - "${ex.quote}" — ${ex.url}`)
+      }
+      lines.push('')
+    }
+  }
 
   lines.push('TOP TOPICS (count of posts):')
   for (const { topic, count } of data.topTopics) {

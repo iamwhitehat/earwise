@@ -6,15 +6,23 @@ import { useScanCtx } from '../_components/scan-provider'
 import { DirectionBadge, StalenessBanner, SynthModelSelect, Topbar } from '../_components/components'
 import { useSynthModel } from '@/lib/use-synth-model'
 import type { WeekSnapshot } from '@/lib/snapshots'
+import type { InsightV2 } from '@/lib/insight-types'
 
 const CHART_WEEKS = 8
 const TOP_TOPICS_IN_CHART = 6
 
-type Insight = {
+// v1 insights (pre-Phase-2 stored rows) — rendered via a compatibility card.
+type InsightV1 = {
   insight: string
   evidence: string[]
   opportunity: string
   confidence: 'high' | 'medium' | 'low'
+}
+
+type AnyInsight = InsightV2 | InsightV1
+
+function isV2(i: AnyInsight): i is InsightV2 {
+  return typeof (i as InsightV2).title === 'string'
 }
 
 type Stats = {
@@ -25,7 +33,7 @@ type Stats = {
 
 type Snapshot = {
   id: number
-  insights: Insight[]
+  insights: AnyInsight[]
   stats: Stats
   generatedAt: number
 } | null
@@ -195,9 +203,13 @@ export default function InsightsPage() {
             />
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap)', marginTop: 30 }}>
-              {snapshot.insights.map((ins, i) => (
-                <InsightCard key={i} insight={ins} index={i} />
-              ))}
+              {snapshot.insights.map((ins, i) =>
+                isV2(ins) ? (
+                  <InsightCardV2 key={i} insight={ins} index={i} />
+                ) : (
+                  <InsightCard key={i} insight={ins} index={i} />
+                ),
+              )}
             </div>
           </>
         )}
@@ -369,7 +381,124 @@ function BarChart({ snapshots }: { snapshots: WeekSnapshot[] }) {
   )
 }
 
-function InsightCard({ insight, index }: { insight: Insight; index: number }) {
+// Insights v2 card: title + demand/momentum chips + problem + what-to-build +
+// why-now + clickable evidence links.
+function InsightCardV2({ insight, index }: { insight: InsightV2; index: number }) {
+  return (
+    <article
+      className="card fade-in"
+      style={{ padding: 'var(--pad)', animationDelay: `${index * 60}ms` }}
+    >
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+        <span className="mono" style={{ fontSize: 11, fontWeight: 600, color: 'var(--ink-4)', marginTop: 3, flexShrink: 0 }}>
+          #{index + 1}
+        </span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <h3 style={{ fontSize: 16, fontWeight: 600, letterSpacing: '-0.01em', color: 'var(--ink)', margin: 0, lineHeight: 1.35 }}>
+            {insight.title}
+          </h3>
+          {insight.audience && (
+            <div className="t-mdp ink-3" style={{ marginTop: 3 }}>for {insight.audience}</div>
+          )}
+        </div>
+        <span
+          className={`badge ${confidenceClass(insight.confidence)}`}
+          style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', fontSize: 10.5, flexShrink: 0 }}
+        >
+          {insight.confidence}
+        </span>
+      </div>
+
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 12 }}>
+        <DemandChip label="posts" value={insight.demand.posts} />
+        <DemandChip label="authors" value={insight.demand.uniqueAuthors} />
+        <DemandChip label="engagement" value={insight.demand.engagement} />
+        {insight.momentum && (
+          <span className="badge" style={{ background: 'var(--accent-softer)', color: 'var(--accent-text)' }}>
+            {insight.momentum}
+          </span>
+        )}
+      </div>
+
+      {insight.problem && (
+        <p style={{ margin: '12px 0 0', fontSize: 13.5, lineHeight: 1.55, color: 'var(--ink-2)' }}>
+          {insight.problem}
+        </p>
+      )}
+
+      <div
+        style={{
+          marginTop: 14,
+          padding: '12px 14px',
+          borderRadius: 'var(--r)',
+          background: 'var(--accent-softer)',
+          border: '1px solid var(--accent-soft)',
+          display: 'flex',
+          gap: 9,
+          alignItems: 'flex-start',
+        }}
+      >
+        <span style={{ color: 'var(--accent)', flexShrink: 0, marginTop: 2 }}>
+          <Icons.bolt size={14} />
+        </span>
+        <div>
+          <div style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--accent-text)', opacity: 0.75, marginBottom: 3 }}>
+            What to build
+          </div>
+          <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.5, color: 'var(--ink)' }}>
+            {insight.whatToBuild}
+          </p>
+          {insight.whyNow && (
+            <p style={{ margin: '8px 0 0', fontSize: 12.5, lineHeight: 1.5, color: 'var(--ink-2)' }}>
+              <span style={{ fontWeight: 600 }}>Why now: </span>
+              {insight.whyNow}
+            </p>
+          )}
+        </div>
+      </div>
+
+      {insight.evidence.length > 0 && (
+        <div style={{ marginTop: 14 }}>
+          <div style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-4)', marginBottom: 6 }}>
+            Evidence
+          </div>
+          <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {insight.evidence.map((e, j) => (
+              <li key={j} style={{ fontSize: 12.5, color: 'var(--ink-2)', lineHeight: 1.5 }}>
+                <span style={{ color: 'var(--ink-3)' }}>“{e.quote}”</span>{' '}
+                {e.permalink && (
+                  <a
+                    href={e.permalink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="accent-link"
+                    style={{ color: 'var(--accent-text)', fontWeight: 500, whiteSpace: 'nowrap' }}
+                  >
+                    source ↗
+                  </a>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </article>
+  )
+}
+
+function DemandChip({ label, value }: { label: string; value: number }) {
+  return (
+    <span
+      className="badge tnum"
+      style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--ink-2)' }}
+      title={`${value} ${label}`}
+    >
+      <b style={{ color: 'var(--ink)' }}>{value}</b>&nbsp;{label}
+    </span>
+  )
+}
+
+function InsightCard({ insight, index }: { insight: InsightV1; index: number }) {
   return (
     <article
       className="card fade-in"
