@@ -515,6 +515,12 @@ columns are additive, so the app keeps working before the migration is run.
 Raw scanning (posts/signals ingestion) stays global in v1; the per-workspace
 scoping applies to memory, profile, leads, opportunities, and events.
 
+**Demo workspace:** `POST /api/projects/demo` (also reachable as "Browse a demo
+first" in the wizard) seeds a fully populated sample workspace — profile,
+memory, ranked opportunities, leads, and outcome events — under the `demo`
+project, then activates it. It reuses the tables above, so it needs this
+migration run first; it's idempotent (re-seeding replaces the demo rows).
+
 ### 2c. Get the credentials
 
 1. Left sidebar → **Settings** → **API**.

@@ -24,6 +24,7 @@ export default function WelcomeWizard() {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [topOpp, setTopOpp] = useState<MaterializedOpportunity | null>(null)
   const [finalizing, setFinalizing] = useState(false)
+  const [loadingDemo, setLoadingDemo] = useState(false)
 
   const scanStarted = useRef(false)
   const sawStreaming = useRef(false)
@@ -44,6 +45,19 @@ export default function WelcomeWizard() {
     }
     await suggest(n)
     setStep('subs')
+  }
+
+  // Skip setup entirely — seed + open the preloaded demo workspace.
+  async function handleDemo() {
+    if (loadingDemo) return
+    setLoadingDemo(true)
+    try {
+      await fetch('/api/projects/demo', { method: 'POST' })
+      window.location.assign('/')
+      return
+    } catch {
+      setLoadingDemo(false)
+    }
   }
 
   // Default-select all suggestions the first time they arrive.
@@ -148,14 +162,19 @@ export default function WelcomeWizard() {
                 }
               }}
             />
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={handleNiche}
-              disabled={niche.trim().length < 2 || suggesting}
-            >
-              {suggesting ? <><Spinner size={14} /> Finding subreddits…</> : <>Continue <Icons.chev size={14} /></>}
-            </button>
+            <div className="wiz-actions" style={{ justifyContent: 'flex-start' }}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={handleNiche}
+                disabled={niche.trim().length < 2 || suggesting}
+              >
+                {suggesting ? <><Spinner size={14} /> Finding subreddits…</> : <>Continue <Icons.chev size={14} /></>}
+              </button>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={handleDemo} disabled={loadingDemo}>
+                {loadingDemo ? <><Spinner size={13} /> Loading demo…</> : 'Browse a demo first →'}
+              </button>
+            </div>
           </section>
         )}
 
