@@ -429,6 +429,28 @@ auto-populates `opportunities` on first load when it's empty; recompute any
 time with `POST /api/opportunities/refresh` (optionally `{ weights }` to tune
 the per-component weights).
 
+### 2b-sexdecies. Migration for weekly digests (Phase 6)
+
+`digests` stores each "State of your market" brief (new opportunities,
+accelerating trends, fresh leads, 3 moves, ready drafts, alerts, predictions).
+Run once:
+
+```sql
+create table if not exists digests (
+  id bigserial primary key,
+  project_id text not null default 'default',
+  period text not null,
+  brief jsonb not null,
+  created_at timestamptz not null default now()
+);
+create index if not exists digests_created_idx on digests (created_at desc);
+```
+
+Generate one in-app on `/digest` (or `POST /api/digest/run`); the scheduled job
+(`POST /api/cron/run`) also produces one. The page tolerates the table being
+absent. See **§5. Scheduling** below for wiring the cron trigger + optional
+email.
+
 ### 2c. Get the credentials
 
 1. Left sidebar → **Settings** → **API**.
