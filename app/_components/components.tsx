@@ -135,7 +135,9 @@ export function CategoryBadge({
   const label = count != null ? `${count} ${cfg.short}${count === 1 ? '' : 's'}` : cfg.short
   return (
     <span className={`badge badge-${cfg.cls}`}>
-      {withDot && <span className="bdot" />}
+      {/* Dot is purely a color accent; the badge label below carries the
+          actual meaning, so hide the dot from screen readers. */}
+      {withDot && <span className="bdot" aria-hidden="true" />}
       {label}
     </span>
   )
@@ -528,10 +530,19 @@ export function TrendRow({
       aria-pressed={selected}
     >
       <span className={`trend-score score-${tier}`}>{opp.scoreRaw.toFixed(1)}</span>
-      <div className="trend-spark">
+      <div
+        className="trend-spark"
+        role="img"
+        aria-label={`8-week trend: ${spark.join(', ')} posts per week`}
+      >
         {spark.map((v, i) => (
           <i
             key={i}
+            title={
+              i === spark.length - 1
+                ? `this week: ${v} posts`
+                : `${spark.length - 1 - i} week${spark.length - 1 - i === 1 ? '' : 's'} ago: ${v} posts`
+            }
             style={{
               height: `${Math.max(10, (v / max) * 100)}%`,
               background: i === spark.length - 1 ? 'var(--accent)' : 'var(--border)',
@@ -548,9 +559,20 @@ export function TrendRow({
         </div>
       </div>
       <div className="trend-cats">
-        {cats.map((c) => (
-          <span key={c} className="cat-tick" style={{ background: `var(--${c})` }} />
-        ))}
+        {cats.map((c) => {
+          const long = c === 'pain' ? 'pain points' : c === 'feature' ? 'feature requests' : 'tool complaints'
+          const letter = c === 'pain' ? 'P' : c === 'feature' ? 'F' : 'T'
+          return (
+            <span
+              key={c}
+              className={`cat-tick cat-tick-${c}`}
+              title={long}
+              aria-label={long}
+            >
+              {letter}
+            </span>
+          )
+        })}
       </div>
       <span className="trend-chev">
         <Icons.chev />
@@ -2470,7 +2492,14 @@ export function Breakdown({ posts }: { posts: TaggedPost[] }) {
                   {n}
                 </span>
               </div>
-              <div className="bd-bar">
+              <div
+                className="bd-bar"
+                role="progressbar"
+                aria-valuemin={0}
+                aria-valuemax={total}
+                aria-valuenow={n}
+                aria-label={`${cfg.label}: ${n} of ${total} posts`}
+              >
                 <i
                   style={{
                     width: `${(n / total) * 100}%`,
@@ -2520,11 +2549,20 @@ export function VolumeCard({ posts }: { posts: TaggedPost[] }) {
           {delta}%
         </span>
       </div>
-      <div className="vol">
+      <div
+        className="vol"
+        role="img"
+        aria-label={`8-week signal volume per week: ${agg.join(', ')} (total ${total})`}
+      >
         {agg.map((v, i) => (
           <i
             key={i}
             className={i === weeks - 1 ? 'peak' : ''}
+            title={
+              i === weeks - 1
+                ? `this week: ${v}`
+                : `${weeks - 1 - i} week${weeks - 1 - i === 1 ? '' : 's'} ago: ${v}`
+            }
             style={{ height: `${Math.max(8, (v / max) * 100)}%` }}
           />
         ))}
