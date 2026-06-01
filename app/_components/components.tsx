@@ -16,7 +16,7 @@ import {
 import type { CommentQuote } from '@/lib/posts-client'
 import type { Direction, WeekSnapshot } from '@/lib/snapshots'
 import type { StarterPreset } from '@/lib/use-watchlist'
-import { toCsv, downloadCsv } from '@/lib/csv'
+import { toCsv, toMarkdown, downloadFile } from '@/lib/csv'
 import { Icons, Spinner, type SimpleIconProps } from './icons'
 import { useScanCtx, useWatchlistCtx } from './scan-provider'
 import { useSidebarCtx } from './sidebar-provider'
@@ -165,20 +165,19 @@ export function ExportButtons({
   build: () => { headers: readonly string[]; rows: readonly (readonly string[])[] }
   disabled?: boolean
 }) {
-  const [copied, setCopied] = useState(false)
+  // Two transient indicators — `copied` carries the format name ('csv' or
+  // 'md') so the success badge can sit on whichever button the user clicked.
+  const [copied, setCopied] = useState<'csv' | 'md' | null>(null)
   const [copyError, setCopyError] = useState(false)
 
-  function buildCsvString() {
+  async function handleCopy(kind: 'csv' | 'md') {
     const { headers, rows } = build()
-    return toCsv(headers, rows)
-  }
-
-  async function handleCopy() {
+    const text = kind === 'csv' ? toCsv(headers, rows) : toMarkdown(headers, rows)
     try {
-      await navigator.clipboard.writeText(buildCsvString())
-      setCopied(true)
+      await navigator.clipboard.writeText(text)
+      setCopied(kind)
       setCopyError(false)
-      setTimeout(() => setCopied(false), 1500)
+      setTimeout(() => setCopied(null), 1500)
     } catch (err) {
       console.warn('[export] clipboard write failed:', err)
       setCopyError(true)
@@ -187,25 +186,39 @@ export function ExportButtons({
   }
 
   function handleDownload() {
+    const { headers, rows } = build()
     const stamp = new Date().toISOString().slice(0, 10)
-    downloadCsv(`${filenameStem}-${stamp}.csv`, buildCsvString())
+    downloadFile(`${filenameStem}-${stamp}.csv`, toCsv(headers, rows), 'text/csv')
   }
 
   return (
-    <span style={{ display: 'inline-flex', gap: 6 }}>
+    <span style={{ display: 'inline-flex', gap: 6, flexWrap: 'wrap' }}>
       <button
         type="button"
         className="btn btn-ghost btn-sm"
-        onClick={handleCopy}
+        onClick={() => handleCopy('csv')}
         disabled={disabled}
         title="Copy CSV to clipboard"
       >
         {copyError ? (
           <span style={{ color: 'var(--pain)' }}>Copy failed</span>
-        ) : copied ? (
+        ) : copied === 'csv' ? (
           <span style={{ color: 'var(--score-high)' }}>Copied!</span>
         ) : (
           <>Copy CSV</>
+        )}
+      </button>
+      <button
+        type="button"
+        className="btn btn-ghost btn-sm"
+        onClick={() => handleCopy('md')}
+        disabled={disabled}
+        title="Copy as Markdown table (Notion / Obsidian / GFM)"
+      >
+        {copied === 'md' ? (
+          <span style={{ color: 'var(--score-high)' }}>Copied!</span>
+        ) : (
+          <>Copy MD</>
         )}
       </button>
       <button
@@ -2349,6 +2362,26 @@ export function TrendsPanel({
             All time
           </button>
         </div>
+        <ExportButtons
+          filenameStem={tab === 'scan' ? 'trends-watchlist' : 'trends-all-time'}
+          disabled={trends.length === 0}
+          build={() => ({
+            headers: ['topic', 'posts', 'score', 'pain', 'feature', 'tool_complaint', 'subreddits'],
+            rows: trends.map((t) => {
+              const opp = computeOpportunity(posts, t.topic)
+              const eff = opp.total > 0 ? opp : { ...opp, total: t.count, subreddits: t.subreddits, scoreRaw: 0 }
+              return [
+                eff.topic,
+                String(eff.total),
+                eff.scoreRaw.toFixed(2),
+                String(eff.painCount),
+                String(eff.featureCount),
+                String(eff.toolCount),
+                eff.subreddits.join('; '),
+              ]
+            }),
+          })}
+        />
       </div>
       <div className="card">
         {tab === 'all' && allTimeLoading && (
