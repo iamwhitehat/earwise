@@ -2,6 +2,8 @@ import type { NextRequest } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
 import { isValidStatus, mapLeadRow } from '@/lib/leads'
 import { logLeadEvent, LEADS_MIGRATION_HINT, LEAD_COLUMNS } from '@/lib/leads-db'
+import { logEvent } from '@/lib/events-db'
+import { statusToEventKind } from '@/lib/events'
 
 const NOTES_MAX = 4000
 
@@ -67,11 +69,23 @@ export async function PATCH(req: NextRequest, ctx: RouteContext<'/api/leads/[id]
   }
   if (!data) return Response.json({ error: 'Lead not found' }, { status: 404 })
 
+  const lead = mapLeadRow(data)
   if (hasStatus) {
     await logLeadEvent(db, leadId, 'status_change', { status: b.status })
+    // Also record an outcome event (LEARN) when the status is itself an
+    // outcome (reply / call / conversion / passed), tagged with the angle.
+    const kind = statusToEventKind(lead.status)
+    if (kind) {
+      await logEvent(db, {
+        entity: 'lead',
+        entityId: String(leadId),
+        kind,
+        payload: { intentType: lead.intentType, topic: lead.topic, category: lead.category, subreddit: lead.subreddit },
+      })
+    }
   }
 
-  return Response.json({ lead: mapLeadRow(data) })
+  return Response.json({ lead })
 }
 
 // DELETE /api/leads/[id]  — remove a lead (its events cascade away).

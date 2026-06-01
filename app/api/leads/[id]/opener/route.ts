@@ -8,6 +8,7 @@ import {
   LEADS_MIGRATION_HINT,
   LEAD_COLUMNS,
 } from '@/lib/leads-db'
+import { logEvent } from '@/lib/events-db'
 
 const VALUEPROP_MAX = 280
 
@@ -73,6 +74,13 @@ export async function POST(req: NextRequest, ctx: RouteContext<'/api/leads/[id]/
       return Response.json({ error: `Database update failed: ${updErr.message}` }, { status: 500 })
     }
     await logLeadEvent(db, leadId, 'opener_sent')
+    // LEARN: a sent draft, tagged with its angle, anchors the conversion funnel.
+    await logEvent(db, {
+      entity: 'lead',
+      entityId: String(leadId),
+      kind: 'draft_sent',
+      payload: { intentType: lead.intentType, topic: lead.topic, subreddit: lead.subreddit },
+    })
     return Response.json({ lead: mapLeadRow((updated ?? row)) })
   }
 

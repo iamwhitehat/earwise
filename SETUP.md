@@ -451,6 +451,30 @@ Generate one in-app on `/digest` (or `POST /api/digest/run`); the scheduled job
 absent. See **§5. Scheduling** below for wiring the cron trigger + optional
 email.
 
+### 2b-septendecies. Migration for outcome events / learning (Phase 7)
+
+A general `events` table captures realized outcomes (draft sent, reply, call
+booked, conversion, opportunity pursued/parked). Those feed the Advantage Score
+weight recalibration, opener guidance, and the "what's working" panel. Run
+once:
+
+```sql
+create table if not exists events (
+  id bigserial primary key,
+  project_id text not null default 'default',
+  entity text not null,          -- 'lead' | 'opportunity'
+  entity_id text not null,       -- lead id, or canonical_topic
+  kind text not null,            -- draft_sent | reply | call_booked | conversion | opportunity_pursued | opportunity_parked | lead_passed
+  payload jsonb,
+  created_at timestamptz not null default now()
+);
+create index if not exists events_kind_idx on events (project_id, kind, created_at desc);
+create index if not exists events_entity_idx on events (entity, entity_id);
+```
+
+Everything tolerates this table being absent: events just aren't logged, the
+Advantage weights stay at their defaults, and the "what's working" panel hides.
+
 ### 2c. Get the credentials
 
 1. Left sidebar → **Settings** → **API**.
