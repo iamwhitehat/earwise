@@ -178,6 +178,12 @@ export default function BuyerLanguagePage() {
                   value={subFilter}
                   onChange={(e) => setSubFilter(e.target.value)}
                   disabled={availableSubs.length === 0}
+                  aria-disabled={availableSubs.length === 0}
+                  title={
+                    availableSubs.length === 0
+                      ? "This run was generated before per-row contexts were stored; filtering by sub would be a no-op. Click 'Refresh language' to regenerate with context tags."
+                      : undefined
+                  }
                   style={{
                     background: 'var(--surface)',
                     color: 'var(--ink)',
@@ -211,6 +217,12 @@ export default function BuyerLanguagePage() {
                   value={catFilter}
                   onChange={(e) => setCatFilter(e.target.value as CatFilter)}
                   disabled={!filtersActive}
+                  aria-disabled={!filtersActive}
+                  title={
+                    !filtersActive
+                      ? "This run was generated before per-row contexts were stored; filtering by category would be a no-op. Click 'Refresh language' to regenerate with context tags."
+                      : undefined
+                  }
                   style={{
                     background: 'var(--surface)',
                     color: 'var(--ink)',
