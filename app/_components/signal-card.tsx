@@ -4,6 +4,7 @@ import { useState, type ReactNode } from 'react'
 import type { Category } from '@/lib/categories'
 import type { IntentType } from '@/lib/intent-patterns'
 import { INTENT_TYPE_LABEL } from '@/lib/intent-patterns'
+import { leadExternalId } from '@/lib/leads'
 import { CategoryBadge, SubChip } from './components'
 import { Icons, Spinner } from './icons'
 
@@ -90,10 +91,43 @@ type DraftState =
   | { status: 'ready'; reply: string }
   | { status: 'error'; error: string }
 
-export function SignalCard({ signal }: { signal: Signal }) {
+type AddState = 'idle' | 'adding' | 'added' | 'error'
+
+export function SignalCard({
+  signal,
+  inPipeline = false,
+  onAdded,
+}: {
+  signal: Signal
+  /** True when this signal already has a lead in the pipeline. */
+  inPipeline?: boolean
+  /** Called with the lead external_id after a successful add. */
+  onAdded?: (externalId: string) => void
+}) {
   const stale = Date.now() - signal.analyzedAt > STALE_MS
   const [draft, setDraft] = useState<DraftState>({ status: 'idle' })
   const [copied, setCopied] = useState(false)
+  const [addState, setAddState] = useState<AddState>('idle')
+
+  async function handleAddToPipeline() {
+    setAddState('adding')
+    try {
+      const res = await fetch('/api/leads', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(signal),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? `Error ${res.status}`)
+      setAddState('added')
+      onAdded?.(leadExternalId(signal.kind, signal.id))
+    } catch {
+      setAddState('error')
+      setTimeout(() => setAddState('idle'), 2000)
+    }
+  }
+
+  const added = inPipeline || addState === 'added'
 
   async function handleDraft() {
     setDraft({ status: 'loading' })
@@ -189,6 +223,30 @@ export function SignalCard({ signal }: { signal: Signal }) {
         {draft.status === 'error' && (
           <button type="button" className="btn btn-ghost btn-sm" onClick={handleDraft}>
             Retry
+          </button>
+        )}
+        {added ? (
+          <span className="signal-in-pipeline" title="This signal is in your Leads pipeline">
+            <Icons.inbox size={12} /> In pipeline ✓
+          </span>
+        ) : (
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={handleAddToPipeline}
+            disabled={addState === 'adding'}
+          >
+            {addState === 'adding' ? (
+              <>
+                <Spinner size={11} color="var(--ink-3)" /> Adding…
+              </>
+            ) : addState === 'error' ? (
+              'Retry add'
+            ) : (
+              <>
+                <Icons.inbox size={12} /> Add to pipeline
+              </>
+            )}
           </button>
         )}
       </div>

@@ -7,6 +7,7 @@ import { Icons, Spinner } from '../_components/icons'
 import { useScanCtx } from '../_components/scan-provider'
 import { SignalCard, type Signal } from '../_components/signal-card'
 import { INTENT_TYPES, INTENT_TYPE_LABEL, type IntentType } from '@/lib/intent-patterns'
+import { leadExternalId, type Lead } from '@/lib/leads'
 
 type IntentFilter = 'all' | IntentType
 type AgeFilter = 'all' | '24h' | 'week'
@@ -72,6 +73,35 @@ function SignalsView() {
   const [subs, setSubs] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  // external_ids of signals already in the Leads pipeline, so cards can show
+  // "In pipeline ✓" instead of an Add button. Fetched once on mount.
+  const [pipelineIds, setPipelineIds] = useState<Set<string>>(() => new Set())
+
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/leads')
+      .then(async (res) => {
+        if (!res.ok) return // leads table may not be migrated yet — non-fatal
+        const json = await res.json()
+        if (cancelled) return
+        const ids = ((json as { leads?: Lead[] }).leads ?? []).map((l) => l.externalId)
+        setPipelineIds(new Set(ids))
+      })
+      .catch(() => {
+        // Pipeline membership is a nicety; ignore failures here.
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const markInPipeline = useCallback((externalId: string) => {
+    setPipelineIds((prev) => {
+      const next = new Set(prev)
+      next.add(externalId)
+      return next
+    })
+  }, [])
 
   // Refetch whenever server-side filters change (sub / intent / age). Sub
   // filter is intentionally server-side too so the per-source 100-cap doesn't
@@ -233,7 +263,12 @@ function SignalsView() {
         {!error && signals.length > 0 && (
           <div className="signals-list">
             {signals.map((s) => (
-              <SignalCard key={`${s.kind}:${s.id}`} signal={s} />
+              <SignalCard
+                key={`${s.kind}:${s.id}`}
+                signal={s}
+                inPipeline={pipelineIds.has(leadExternalId(s.kind, s.id))}
+                onAdded={markInPipeline}
+              />
             ))}
           </div>
         )}
