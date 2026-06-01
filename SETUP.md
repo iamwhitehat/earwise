@@ -475,6 +475,46 @@ create index if not exists events_entity_idx on events (entity, entity_id);
 Everything tolerates this table being absent: events just aren't logged, the
 Advantage weights stay at their defaults, and the "what's working" panel hides.
 
+### 2b-duodevicies. Migration for Projects / workspaces (Phase 8)
+
+Projects give each idea its own workspace (its own memory, profile, leads,
+opportunities, events). A `projects` table plus a `project_id` column on the
+workspace-scoped tables, defaulting to `'default'` so all pre-existing rows
+belong to the default workspace (lazy backfill — no data migration needed).
+Run once:
+
+```sql
+create table if not exists projects (
+  id text primary key,                       -- url-safe slug
+  name text not null,
+  niche text not null default '',
+  created_at timestamptz not null default now()
+);
+
+-- The workspace that owns all pre-projects data.
+insert into projects (id, name) values ('default', 'Default workspace')
+  on conflict (id) do nothing;
+
+-- Add project_id to the tables that weren't scoped yet. Existing rows default
+-- to the 'default' workspace. (business_memory / opportunities / digests /
+-- events already carry project_id from earlier phases.)
+alter table leads             add column if not exists project_id text not null default 'default';
+alter table business_profile  add column if not exists project_id text not null default 'default';
+alter table strategy_runs     add column if not exists project_id text not null default 'default';
+alter table signals           add column if not exists project_id text not null default 'default';
+alter table sources           add column if not exists project_id text not null default 'default';
+
+create index if not exists leads_project_idx            on leads (project_id, last_event_at desc);
+create index if not exists business_profile_project_idx on business_profile (project_id, updated_at desc);
+```
+
+The active workspace is held in an `rr_project` cookie and resolved per
+request; switch it from the sidebar. Everything tolerates the `projects` table
+being absent (a synthetic "Default workspace" is shown) and the `project_id`
+columns are additive, so the app keeps working before the migration is run.
+Raw scanning (posts/signals ingestion) stays global in v1; the per-workspace
+scoping applies to memory, profile, leads, opportunities, and events.
+
 ### 2c. Get the credentials
 
 1. Left sidebar → **Settings** → **API**.

@@ -10,6 +10,7 @@ import {
 } from '@/lib/leads-db'
 import { logEvent } from '@/lib/events-db'
 import { loadWhatWorkedGuidance } from '@/lib/recalibrate-db'
+import { activeProjectId } from '@/lib/project-server'
 
 const VALUEPROP_MAX = 280
 
@@ -81,6 +82,7 @@ export async function POST(req: NextRequest, ctx: RouteContext<'/api/leads/[id]/
       entityId: String(leadId),
       kind: 'draft_sent',
       payload: { intentType: lead.intentType, topic: lead.topic, subreddit: lead.subreddit },
+      projectId: await activeProjectId(),
     })
     return Response.json({ lead: mapLeadRow((updated ?? row)) })
   }
@@ -92,7 +94,7 @@ export async function POST(req: NextRequest, ctx: RouteContext<'/api/leads/[id]/
       ? b.valueProp.trim().slice(0, VALUEPROP_MAX)
       : null
   const phrases = await topBuyerPhrases(db)
-  const guidance = await loadWhatWorkedGuidance(db)
+  const guidance = await loadWhatWorkedGuidance(db, await activeProjectId())
 
   const opener = await draftOpener({
     author: lead.author,

@@ -2,6 +2,7 @@ import type { NextRequest } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
 import { normalizeLeadInput, mapLeadRow, type NormalizedLead } from '@/lib/leads'
 import { logLeadEvent, LEADS_MIGRATION_HINT, LEAD_COLUMNS } from '@/lib/leads-db'
+import { activeProjectId } from '@/lib/project-server'
 
 const MAX_BULK = 100
 
@@ -59,9 +60,11 @@ export async function POST(req: NextRequest) {
     )
   }
 
+  const projectId = await activeProjectId()
+  const taggedRows = rows.map((r) => ({ ...r, project_id: projectId }))
   const { data: inserted, error } = await db
     .from('leads')
-    .upsert(rows, { onConflict: 'source,external_id', ignoreDuplicates: true })
+    .upsert(taggedRows, { onConflict: 'source,external_id', ignoreDuplicates: true })
     .select(LEAD_COLUMNS)
 
   if (error) {

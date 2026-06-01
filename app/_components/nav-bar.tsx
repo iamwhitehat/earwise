@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import { useScanCtx, useWatchlistCtx } from './scan-provider'
 import { useSidebarCtx } from './sidebar-provider'
 import { ThemeToggle } from './theme-toggle'
+import { ProjectSwitcher } from './project-switcher'
 import { Icons, Spinner, type SimpleIconProps } from './icons'
 
 // Dark, vertical sidebar. The information architecture mirrors the funnel a
@@ -97,6 +98,8 @@ export function NavBar() {
           <span>Radar</span>
         </div>
       </Link>
+
+      <ProjectSwitcher />
 
       {NAV_GROUPS.map((group) => (
         <div key={group.label}>

@@ -4,6 +4,7 @@ import { isValidStatus, mapLeadRow } from '@/lib/leads'
 import { logLeadEvent, LEADS_MIGRATION_HINT, LEAD_COLUMNS } from '@/lib/leads-db'
 import { logEvent } from '@/lib/events-db'
 import { statusToEventKind } from '@/lib/events'
+import { activeProjectId } from '@/lib/project-server'
 
 const NOTES_MAX = 4000
 
@@ -53,10 +54,12 @@ export async function PATCH(req: NextRequest, ctx: RouteContext<'/api/leads/[id]
     patch.notes = notes.length > 0 ? notes : null
   }
 
+  const projectId = await activeProjectId()
   const { data, error } = await db
     .from('leads')
     .update(patch)
     .eq('id', leadId)
+    .eq('project_id', projectId)
     .select(LEAD_COLUMNS)
     .maybeSingle()
 
@@ -81,6 +84,7 @@ export async function PATCH(req: NextRequest, ctx: RouteContext<'/api/leads/[id]
         entityId: String(leadId),
         kind,
         payload: { intentType: lead.intentType, topic: lead.topic, category: lead.category, subreddit: lead.subreddit },
+        projectId,
       })
     }
   }
@@ -104,7 +108,11 @@ export async function DELETE(_req: NextRequest, ctx: RouteContext<'/api/leads/[i
     )
   }
 
-  const { error } = await db.from('leads').delete().eq('id', leadId)
+  const { error } = await db
+    .from('leads')
+    .delete()
+    .eq('id', leadId)
+    .eq('project_id', await activeProjectId())
   if (error) {
     console.error('[leads] delete error:', error)
     return Response.json(

@@ -214,6 +214,40 @@ a { color: inherit; text-decoration: none; }
 .nav-item svg { width: 16px; height: 16px; flex-shrink: 0; opacity: .85; }
 .nav-sub { padding-left: 18px; font-size: 12.5px; color: var(--side-ink-3); }
 .nav-sub svg { width: 14px; height: 14px; }
+
+/* Workspace switcher (Phase 8 / Projects) */
+.proj-switch { position: relative; margin: 10px 0 4px; }
+.proj-current {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 7px 9px; border-radius: var(--r-sm);
+  background: var(--side-bg-2); border: 1px solid var(--side-border);
+  color: var(--side-ink); font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer;
+}
+.proj-current svg { opacity: .8; flex-shrink: 0; }
+.proj-current:hover { border-color: var(--accent-ring); }
+.proj-name { flex: 1; min-width: 0; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.proj-backdrop { position: fixed; inset: 0; z-index: 40; }
+.proj-menu {
+  position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 41;
+  background: var(--side-bg-2); border: 1px solid var(--side-border); border-radius: var(--r-sm);
+  padding: 4px; box-shadow: 0 12px 30px rgba(0,0,0,.35);
+  display: flex; flex-direction: column; gap: 2px; max-height: 280px; overflow-y: auto;
+}
+.proj-item {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 6px 8px; border-radius: var(--r-sm); border: none; background: none;
+  color: var(--side-ink-2); font: inherit; font-size: 12.5px; text-align: left; cursor: pointer;
+}
+.proj-item:hover { background: var(--side-bg); color: var(--side-ink); }
+.proj-item.active { color: #fff; }
+.proj-item-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.proj-check { color: var(--accent-ring); font-weight: 700; }
+.proj-new {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 8px; margin-top: 2px; border-top: 1px solid var(--side-border);
+  color: var(--accent-ring); font-size: 12.5px; text-decoration: none;
+}
+.proj-new:hover { background: var(--side-bg); }
 .nav-item:hover { background: var(--side-bg-2); color: var(--side-ink); }
 .nav-item.active { background: var(--side-bg-2); color: #fff; }
 .nav-item.active svg { opacity: 1; color: var(--accent-ring); }

@@ -3,6 +3,7 @@ import { getSupabase } from '@/lib/supabase'
 import { materializeOpportunities } from '@/lib/advantage-materialize'
 import { normalizeWeights } from '@/lib/advantage'
 import { loadRecalibration } from '@/lib/recalibrate-db'
+import { activeProjectId } from '@/lib/project-server'
 
 // POST /api/opportunities/refresh — recompute + materialize Advantage Scores.
 // Body: { weights? } to override the component weights for this project; when
@@ -27,9 +28,10 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const recal = b.weights ? null : await loadRecalibration(db)
+    const projectId = await activeProjectId()
+    const recal = b.weights ? null : await loadRecalibration(db, projectId)
     const weights = b.weights ? normalizeWeights(b.weights) : recal?.weights
-    const opportunities = await materializeOpportunities(db, { weights })
+    const opportunities = await materializeOpportunities(db, { weights, projectId })
     return Response.json({
       count: opportunities.length,
       opportunities,

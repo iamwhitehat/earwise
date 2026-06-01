@@ -2,6 +2,7 @@ import type { NextRequest } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
 import { logEvent } from '@/lib/events-db'
 import { isValidEventKind, type EventEntity } from '@/lib/events'
+import { activeProjectId } from '@/lib/project-server'
 
 const ENTITIES: EventEntity[] = ['lead', 'opportunity']
 const MAX_ID = 200
@@ -40,6 +41,6 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  await logEvent(db, { entity, entityId, kind: b.kind, payload })
+  await logEvent(db, { entity, entityId, kind: b.kind, payload, projectId: await activeProjectId() })
   return Response.json({ ok: true })
 }

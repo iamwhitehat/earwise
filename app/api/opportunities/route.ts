@@ -1,5 +1,5 @@
 import { getSupabase } from '@/lib/supabase'
-import { DEFAULT_PROJECT } from '@/lib/memory'
+import { activeProjectId } from '@/lib/project-server'
 import type { MaterializedOpportunity } from '@/lib/advantage-materialize'
 
 // GET /api/opportunities — materialized opportunities ranked by Advantage
@@ -19,7 +19,7 @@ export async function GET() {
   const { data, error } = await db
     .from('opportunities')
     .select('canonical_topic, demand, monetization, momentum, whitespace, fit_to_you, advantage_score, components, updated_at')
-    .eq('project_id', DEFAULT_PROJECT)
+    .eq('project_id', await activeProjectId())
     .order('advantage_score', { ascending: false })
     .limit(50)
 

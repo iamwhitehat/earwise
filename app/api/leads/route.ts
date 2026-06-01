@@ -8,6 +8,7 @@ import {
   type LeadStatus,
 } from '@/lib/leads'
 import { logLeadEvent, LEADS_MIGRATION_HINT, LEAD_COLUMNS } from '@/lib/leads-db'
+import { activeProjectId } from '@/lib/project-server'
 
 // GET /api/leads?status=  — list leads (newest activity first) + per-status
 // counts. Status filter is optional; an unknown status is a 400.
@@ -27,9 +28,11 @@ export async function GET(req: NextRequest) {
     )
   }
 
+  const projectId = await activeProjectId()
   let listQuery = db
     .from('leads')
     .select(LEAD_COLUMNS)
+    .eq('project_id', projectId)
     .order('last_event_at', { ascending: false })
     .limit(500)
   if (statusParam) listQuery = listQuery.eq('status', statusParam)
@@ -38,7 +41,7 @@ export async function GET(req: NextRequest) {
   // board can show per-column totals regardless of the active filter.
   const [listRes, countRes] = await Promise.all([
     listQuery,
-    db.from('leads').select('status'),
+    db.from('leads').select('status').eq('project_id', projectId),
   ])
 
   if (listRes.error || countRes.error) {
@@ -90,10 +93,12 @@ export async function POST(req: NextRequest) {
 
   // Insert, ignoring a conflict on the unique (source, external_id) key. A
   // returned row means it was newly created; an empty result means it already
-  // existed, which we then fetch so the client always gets the lead back.
+  // existed, which we then fetch so the client always gets the lead back. The
+  // lead is tagged with the active project (workspace).
+  const projectId = await activeProjectId()
   const { data: inserted, error: insertErr } = await db
     .from('leads')
-    .upsert(norm.lead, { onConflict: 'source,external_id', ignoreDuplicates: true })
+    .upsert({ ...norm.lead, project_id: projectId }, { onConflict: 'source,external_id', ignoreDuplicates: true })
     .select(LEAD_COLUMNS)
     .maybeSingle()
 
@@ -118,6 +123,8 @@ export async function POST(req: NextRequest) {
     .eq('source', norm.lead.source)
     .eq('external_id', norm.lead.external_id)
     .maybeSingle()
+  // Note: the (source, external_id) uniqueness is global in v1, so a signal
+  // already saved in another workspace returns that row here.
 
   if (fetchErr || !existing) {
     return Response.json(

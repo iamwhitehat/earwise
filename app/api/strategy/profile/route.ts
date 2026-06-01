@@ -2,6 +2,7 @@ import type { NextRequest } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
 import { normalizeProfile, EMPTY_PROFILE } from '@/lib/strategy'
 import { seedMemoryFromProfile } from '@/lib/memory-db'
+import { activeProjectId } from '@/lib/project-server'
 
 const MIGRATION_HINT =
   'If a missing table is named, run the Guided strategist migration in SETUP.md (2b-terdecies).'
@@ -21,6 +22,7 @@ export async function GET() {
   const { data, error } = await db
     .from('business_profile')
     .select('profile, updated_at')
+    .eq('project_id', await activeProjectId())
     .order('updated_at', { ascending: false })
     .limit(1)
     .maybeSingle()
@@ -61,9 +63,10 @@ export async function PUT(req: NextRequest) {
     )
   }
 
+  const projectId = await activeProjectId()
   const { data, error } = await db
     .from('business_profile')
-    .insert({ profile })
+    .insert({ profile, project_id: projectId })
     .select('updated_at')
     .single()
 
@@ -76,8 +79,8 @@ export async function PUT(req: NextRequest) {
   }
 
   // Seed Business Memory from the profile (best-effort; tolerant of an
-  // unmigrated business_memory table).
-  await seedMemoryFromProfile(db, profile)
+  // unmigrated business_memory table). Scoped to the active workspace.
+  await seedMemoryFromProfile(db, profile, projectId)
 
   return Response.json({ profile, updatedAt: new Date(data.updated_at as string).getTime() })
 }

@@ -1,5 +1,6 @@
 import { getSupabase } from '@/lib/supabase'
 import { loadEvents } from '@/lib/events-db'
+import { activeProjectId } from '@/lib/project-server'
 import {
   funnelTotals,
   conversionRates,
@@ -23,7 +24,7 @@ export async function GET() {
     )
   }
 
-  const events = await loadEvents(db)
+  const events = await loadEvents(db, { projectId: await activeProjectId() })
   const samples = buildOutcomeSamples(events)
   const recal = recalibrateWeights(samples)
 
