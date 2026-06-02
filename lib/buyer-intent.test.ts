@@ -3,6 +3,10 @@ import {
   isGenuineBuyer,
   buildBuyerIntentInput,
   normalizeBuyerVerdicts,
+  buildNicheContext,
+  nicheKey,
+  buildSignalGateInput,
+  normalizeSignalVerdicts,
 } from './buyer-intent'
 
 describe('isGenuineBuyer', () => {
@@ -48,5 +52,55 @@ describe('normalizeBuyerVerdicts', () => {
   it('returns all-null for a non-array payload', () => {
     expect(normalizeBuyerVerdicts(null, 3)).toEqual([null, null, null])
     expect(normalizeBuyerVerdicts({ verdicts: 'nope' }, 1)).toEqual([null])
+  })
+})
+
+describe('buildNicheContext', () => {
+  it('joins non-empty parts and collapses whitespace', () => {
+    expect(buildNicheContext(['AI support tools', null, '  founders  ', undefined])).toBe(
+      'AI support tools · founders',
+    )
+  })
+  it('is empty when there is nothing', () => {
+    expect(buildNicheContext([null, '', '   '])).toBe('')
+  })
+})
+
+describe('nicheKey', () => {
+  it('is stable + case/space-insensitive, empty for empty', () => {
+    expect(nicheKey('')).toBe('')
+    expect(nicheKey('AI support tools')).toBe(nicheKey('  ai   support tools '))
+  })
+  it('differs for different niches', () => {
+    expect(nicheKey('ai support tools')).not.toBe(nicheKey('e-commerce analytics'))
+  })
+})
+
+describe('buildSignalGateInput', () => {
+  it('prefixes the niche then the numbered items', () => {
+    const out = buildSignalGateInput('AI support', [{ text: 'looking for a tool' }])
+    expect(out).toContain("Founder's niche: AI support")
+    expect(out).toContain('1. looking for a tool')
+  })
+  it('omits the niche line when empty', () => {
+    expect(buildSignalGateInput('', [{ text: 'x' }]).startsWith('1.')).toBe(true)
+  })
+})
+
+describe('normalizeSignalVerdicts', () => {
+  it('maps buyer + on_niche per index, tolerant of junk', () => {
+    const out = normalizeSignalVerdicts(
+      { verdicts: [
+        { index: 1, is_buyer: true, on_niche: true, confidence: 'high' },
+        { index: 2, is_buyer: true, on_niche: false },
+        { index: 9, is_buyer: true, on_niche: true },
+      ] },
+      2,
+    )
+    expect(out[0]).toEqual({ buyer: 'buyer', onNiche: true, confidence: 'high' })
+    expect(out[1]).toEqual({ buyer: 'buyer', onNiche: false, confidence: 'medium' })
+  })
+  it('returns all-null for a non-array payload', () => {
+    expect(normalizeSignalVerdicts(null, 2)).toEqual([null, null])
   })
 })

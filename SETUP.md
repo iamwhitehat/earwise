@@ -582,6 +582,31 @@ each newly-surfaced signal is classified once (bounded per request), the verdict
 is stored, and the Signals feed + Hot-now keep only confirmed buyers (rows not
 yet classified pass through until they are). No new env.
 
+### 2b-unvicies. Migration for the relevance gate (on-niche)
+
+Buyer-intent says "this is a real buyer"; relevance says "…and they're a buyer
+for *your* niche". The same Haiku pass now also judges whether each signal is
+on-niche for the active project (its niche + business profile/memory), so only
+on-niche genuine buyers reach Hot-now / Leads. Because relevance depends on the
+niche, the verdict is cached together with a `niche_key` and is only trusted
+while that key matches the current niche (switch projects / change your profile
+→ it re-classifies). Run once:
+
+```sql
+alter table posts          add column if not exists on_niche boolean;
+alter table posts          add column if not exists niche_key text;
+alter table posts          add column if not exists on_niche_at timestamptz;
+alter table post_comments  add column if not exists on_niche boolean;
+alter table post_comments  add column if not exists niche_key text;
+alter table post_comments  add column if not exists on_niche_at timestamptz;
+```
+
+Null-tolerant: a missing column → relevance gating is skipped (buyer gate still
+applies). When there's no niche yet (no project niche / empty profile),
+relevance is not applied at all — nothing is hidden. If `EMBEDDINGS_API_KEY` is
+set, an embeddings pre-screen cheaply drops clearly off-niche items before the
+Haiku call; otherwise Haiku does the whole judgement. No new required env.
+
 ### 2c. Get the credentials
 
 1. Left sidebar → **Settings** → **API**.
