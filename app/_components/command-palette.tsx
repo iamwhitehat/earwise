@@ -89,7 +89,7 @@ export function CommandPalette() {
       { id: 'voice', label: 'Customer Voice', run: () => { router.push('/customer-voice'); close() } },
       { id: 'insights', label: 'Insights', run: () => { router.push('/insights'); close() } },
       { id: 'signals', label: 'Signal feed', run: () => { router.push('/signals'); close() } },
-      { id: 'explore', label: 'Discover · Explore', run: () => { router.push('/explore'); close() } },
+      { id: 'explore', label: 'Discover', run: () => { router.push('/explore'); close() } },
       { id: 'digest', label: 'Digest', run: () => { router.push('/digest'); close() } },
       { id: 'guide', label: 'Plan', run: () => { router.push('/pipeline?view=plan'); close() } },
     ],

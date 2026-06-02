@@ -114,7 +114,7 @@ function ExploreView() {
 
   return (
     <>
-      <Topbar title="Explore" posts={scan.posts} />
+      <Topbar title="Discover" posts={scan.posts} />
 
       <div className="content scroll">
         <WatchlistEditor
@@ -225,7 +225,7 @@ function ExploreView() {
 function ExploreFallback() {
   return (
     <>
-      <Topbar title="Explore" posts={[]} />
+      <Topbar title="Discover" posts={[]} />
       <div className="content scroll">
         <div className="empty" style={{ padding: 24 }}>
           <Spinner size={16} color="var(--ink-3)" /> Loading explore…
