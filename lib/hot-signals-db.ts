@@ -12,6 +12,33 @@ import { computeFitToYou } from './advantage'
 import { fitText, DEFAULT_PROJECT } from './memory'
 import { loadMemoryFacts } from './memory-db'
 
+const HOUR_MS = 60 * 60 * 1000
+const DEFAULT_HOT_NOW_HOURS = 6
+
+/** HOT NOW window in hours (env-tunable HOT_NOW_WINDOW_HOURS, default 6).
+ *  Tight by design so the lane shows fresh demand, not stale 20h rows. */
+export function hotNowWindowHours(): number {
+  const raw = Number(process.env.HOT_NOW_WINDOW_HOURS)
+  return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_HOT_NOW_HOURS
+}
+
+export function hotNowWindowMs(): number {
+  return hotNowWindowHours() * HOUR_MS
+}
+
+/** Epoch ms of the most recent scan (newest analyzed post), for the "last scan
+ *  {t}" empty state. null when nothing has been scanned / the table is absent. */
+export async function lastScanAt(db: SupabaseClient): Promise<number | null> {
+  const { data, error } = await db
+    .from('posts')
+    .select('analyzed_at')
+    .order('analyzed_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (error || !data?.analyzed_at) return null
+  return new Date(data.analyzed_at as string).getTime()
+}
+
 export async function loadHotSignals(
   db: SupabaseClient,
   opts: { windowMs: number; projectId?: string; limit?: number; minScore?: number },

@@ -74,8 +74,8 @@ export default function TodayPage() {
     return parts.length > 0 ? parts.join(' · ') : 'Your market at a glance'
   }, [opps, newLeads, contacted])
 
-  // Inbox-zero only once everything has loaded and the hot lane is empty too —
-  // HotNowLane hides itself when empty, so we gate the "caught up" card on opps/leads.
+  // Inbox-zero card is gated on opps/leads being empty. HotNowLane shows its own
+  // honest empty state ("no hot, on-niche leads right now") independently.
   const nothing = !loading && topOpps.length === 0 && newLeads === 0 && contacted === 0
 
   return (

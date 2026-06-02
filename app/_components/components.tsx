@@ -954,7 +954,7 @@ export function FunnelStrip() {
 
 function recency(ts: number): { label: string; fresh: boolean } {
   const diff = Date.now() - ts
-  const fresh = diff < 3_600_000 // < 1h → lime
+  const fresh = diff < 7_200_000 // < 2h → lime
   if (diff < 60_000) return { label: 'just now', fresh }
   if (diff < 3_600_000) return { label: `${Math.floor(diff / 60_000)}m ago`, fresh }
   if (diff < 86_400_000) return { label: `${Math.floor(diff / 3_600_000)}h ago`, fresh }
@@ -964,20 +964,26 @@ function recency(ts: number): { label: string; fresh: boolean } {
 type ReplyState = { status: 'idle' | 'working' | 'done' | 'error'; opener?: string; leadId?: number; error?: string }
 
 /**
- * "Hot now 🔥" — the freshest high-intent signals, scored by Lead Score.
+ * "Hot now 🔥" — the freshest high-intent, on-niche buyers, scored by Lead Score.
  * `Reply now` adds the signal to the pipeline and pre-drafts an opener inline.
- * Renders nothing until there's at least one hot/warm signal in the window.
+ * Window is tight by default (server's HOT_NOW_WINDOW_HOURS); when nothing
+ * qualifies it shows an honest empty state with the last-scan time rather than
+ * stale rows.
  */
-export function HotNowLane({ window = '24h', limit = 6 }: { window?: string; limit?: number }) {
+export function HotNowLane({ window, limit = 6 }: { window?: string; limit?: number }) {
   const [signals, setSignals] = useState<HotSignal[] | null>(null)
+  const [scannedAt, setScannedAt] = useState<number | null>(null)
   const [replies, setReplies] = useState<Record<string, ReplyState>>({})
 
   useEffect(() => {
     let cancelled = false
-    fetch(`/api/hot-signals?window=${encodeURIComponent(window)}`)
+    const url = window ? `/api/hot-signals?window=${encodeURIComponent(window)}` : '/api/hot-signals'
+    fetch(url)
       .then((r) => (r.ok ? r.json() : null))
-      .then((json: { signals?: HotSignal[] } | null) => {
-        if (!cancelled && json) setSignals(json.signals ?? [])
+      .then((json: { signals?: HotSignal[]; scannedAt?: number | null } | null) => {
+        if (cancelled || !json) return
+        setSignals(json.signals ?? [])
+        setScannedAt(json.scannedAt ?? null)
       })
       .catch(() => {
         if (!cancelled) setSignals([])
@@ -1033,8 +1039,24 @@ export function HotNowLane({ window = '24h', limit = 6 }: { window?: string; lim
     }
   }
 
-  if (!signals || signals.length === 0) return null
+  if (signals === null) return null // still loading
   const shown = signals.slice(0, limit)
+
+  // Honest empty state — say so (with the last-scan time) rather than show stale
+  // rows when nothing on-niche qualifies in the tight window.
+  if (shown.length === 0) {
+    return (
+      <section className="section">
+        <div className="section-head">
+          <h2>Hot now <span aria-hidden="true">🔥</span></h2>
+          <span className="pill">speed-to-lead</span>
+        </div>
+        <p className="hotnow-empty">
+          No hot, on-niche leads right now{scannedAt ? ` — last scan ${recency(scannedAt).label}` : ''}.
+        </p>
+      </section>
+    )
+  }
 
   return (
     <section className="section">
