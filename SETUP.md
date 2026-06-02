@@ -621,6 +621,30 @@ Haiku call; otherwise Haiku does the whole judgement. No new required env.
 > client component ever tries to import it. The key never reaches the browser.
 > Do not commit `.env.local` (`.env*` is already gitignored).
 
+### 2d. Google sign-in (auth)
+
+The app gates access behind Google sign-in (Supabase Auth). The browser/server
+auth clients use the **public** URL + **anon** key (separate from the
+service-role key above):
+
+```
+NEXT_PUBLIC_SUPABASE_URL=<same Project URL>
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<the anon/public key from Settings → API>
+```
+
+Then, in the Supabase dashboard:
+
+1. **Authentication → Providers → Google** — enable it and paste your Google
+   OAuth **Client ID + Secret** (create them in Google Cloud Console; authorized
+   redirect URI = `https://<your-project>.supabase.co/auth/v1/callback`).
+2. **Authentication → URL Configuration** — add your app origin(s) (e.g.
+   `http://localhost:3000` and your prod URL) to **Redirect URLs**.
+
+Tolerant by design: if the `NEXT_PUBLIC_*` vars are absent the proxy **does not
+gate** (the app runs unauthenticated, as before), so existing setups keep
+working until you opt in. Public routes (no login): `/login`, `/auth/callback`,
+and the marketing/demo site `/site`.
+
 ---
 
 ## 3. Restart the server
