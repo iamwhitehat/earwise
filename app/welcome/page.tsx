@@ -53,7 +53,7 @@ export default function WelcomeWizard() {
     setLoadingDemo(true)
     try {
       await fetch('/api/projects/demo', { method: 'POST' })
-      window.location.assign('/')
+      window.location.assign('/today')
       return
     } catch {
       setLoadingDemo(false)
@@ -251,7 +251,7 @@ export default function WelcomeWizard() {
                 </div>
                 <div className="wiz-next">
                   <span className="wiz-next-label">Next:</span>
-                  <Link href="/" className="btn btn-primary btn-sm">See full dashboard</Link>
+                  <Link href="/today" className="btn btn-primary btn-sm">Go to Today</Link>
                   <Link href="/pipeline" className="btn btn-ghost btn-sm">Find leads to contact</Link>
                   <Link href="/customer-voice" className="btn btn-ghost btn-sm">Hear customer voice</Link>
                 </div>
@@ -262,7 +262,7 @@ export default function WelcomeWizard() {
                   Your subs are scanned and on your watchlist. Opportunities populate as more
                   posts come in — open the dashboard to explore what we found.
                 </p>
-                <Link href="/" className="btn btn-primary">Open dashboard</Link>
+                <Link href="/today" className="btn btn-primary">Open Today</Link>
               </>
             )}
           </section>

@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { SubChip, CategoryBadge, LeadScoreBadge, HotNowLane, FunnelStrip } from './components'
+import { SubChip, CategoryBadge, LeadScoreBadge, HotNowLane, FunnelStrip, WhatsWorkingPanel } from './components'
 import { snippetWithHighlight, formatAge } from './signal-card'
 import { Icons, Spinner } from './icons'
 import { findFirstMatch } from '@/lib/intent-patterns'
@@ -234,6 +234,8 @@ export function LeadsBoard() {
             ))}
           </div>
         )}
+
+        <WhatsWorkingPanel />
     </>
   )
 }

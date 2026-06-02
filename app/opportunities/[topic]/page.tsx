@@ -173,8 +173,8 @@ export default function OpportunityWorkspace() {
   return (
     <>
       <Topbar title="Opportunity" posts={scan.posts}>
-        <Link href="/" className="btn btn-ghost btn-sm" style={{ textDecoration: 'none' }}>
-          <Icons.chev size={12} className="ws-back-chev" /> Opportunities
+        <Link href="/today" className="btn btn-ghost btn-sm" style={{ textDecoration: 'none' }}>
+          <Icons.chev size={12} className="ws-back-chev" /> Today
         </Link>
       </Topbar>
 

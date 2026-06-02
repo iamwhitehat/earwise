@@ -20,6 +20,13 @@ type AskAnswer = {
 
 export const OPEN_CMDK_EVENT = 'earwise:open-cmdk'
 
+// Quick prompts for Ask mode (carried over from the retired dashboard's Ask bar).
+const ASK_CHIPS = [
+  'What are people most frustrated about?',
+  'Which tools do they complain about?',
+  'What would they pay for?',
+]
+
 export function CommandPalette() {
   const router = useRouter()
   const scan = useScanCtx()
@@ -35,15 +42,24 @@ export function CommandPalette() {
 
   const close = useCallback(() => setOpen(false), [])
 
-  // Global open: ⌘K / Ctrl+K toggles; a sidebar button dispatches OPEN_CMDK_EVENT.
+  // The mode the palette should open into (default Go; a caller can request Ask).
+  const pendingMode = useRef<Mode>('go')
+
+  // Global open: ⌘K / Ctrl+K toggles; dispatch OPEN_CMDK_EVENT (optionally with
+  // { detail: { mode } }) to open a specific mode — e.g. the Today "Ask" button.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault()
-        setOpen((o) => !o)
+        setOpen((o) => {
+          if (!o) pendingMode.current = 'go'
+          return !o
+        })
       }
     }
-    function onOpen() {
+    function onOpen(e: Event) {
+      const m = (e as CustomEvent<{ mode?: Mode }>).detail?.mode
+      pendingMode.current = m === 'ask' || m === 'act' ? m : 'go'
       setOpen(true)
     }
     window.addEventListener('keydown', onKey)
@@ -54,12 +70,12 @@ export function CommandPalette() {
     }
   }, [])
 
-  // Reset + focus on open.
+  // Reset + focus on open (into the requested mode).
   useEffect(() => {
     if (!open) return
     setQuery('')
     setSel(0)
-    setMode('go')
+    setMode(pendingMode.current)
     setAnswer(null)
     setAskErr(null)
     const t = setTimeout(() => inputRef.current?.focus(), 0)
@@ -68,8 +84,7 @@ export function CommandPalette() {
 
   const goCmds: Cmd[] = useMemo(
     () => [
-      { id: 'today', label: 'Today', hint: 'triage', run: () => { router.push('/today'); close() } },
-      { id: 'opps', label: 'Opportunities', hint: 'dashboard', run: () => { router.push('/'); close() } },
+      { id: 'today', label: 'Today', hint: 'home', run: () => { router.push('/today'); close() } },
       { id: 'pipeline', label: 'Pipeline · Leads', run: () => { router.push('/pipeline'); close() } },
       { id: 'voice', label: 'Customer Voice', run: () => { router.push('/customer-voice'); close() } },
       { id: 'insights', label: 'Insights', run: () => { router.push('/insights'); close() } },
@@ -112,9 +127,10 @@ export function CommandPalette() {
     setMode((m) => MODES[(MODES.indexOf(m) + dir + MODES.length) % MODES.length])
   }
 
-  async function runAsk() {
-    const text = query.trim()
+  async function runAsk(prompt?: string) {
+    const text = (prompt ?? query).trim()
     if (text.length < 3 || asking) return
+    if (prompt) setQuery(prompt)
     setAsking(true)
     setAskErr(null)
     setAnswer(null)
@@ -226,7 +242,16 @@ export function CommandPalette() {
               </>
             )}
             {!asking && !answer && !askErr && (
-              <div className="cmdk-ask-hint">Type a question and press Enter — e.g. “what do people hate about current tools?”</div>
+              <>
+                <div className="cmdk-ask-hint">Ask your market in plain English — answers cite the real threads.</div>
+                <div className="cmdk-ask-chips">
+                  {ASK_CHIPS.map((c) => (
+                    <button key={c} type="button" className="cmdk-ask-chip" onClick={() => void runAsk(c)}>
+                      {c}
+                    </button>
+                  ))}
+                </div>
+              </>
             )}
           </div>
         )}

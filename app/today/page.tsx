@@ -71,7 +71,16 @@ export default function TodayPage() {
       </Topbar>
 
       <div className="content scroll">
-        <p className="today-since">{sinceLine}</p>
+        <div className="today-top">
+          <p className="today-since">{sinceLine}</p>
+          <button
+            type="button"
+            className="today-ask"
+            onClick={() => window.dispatchEvent(new CustomEvent('earwise:open-cmdk', { detail: { mode: 'ask' } }))}
+          >
+            <Icons.compass size={13} /> Ask your market
+          </button>
+        </div>
 
         <HotNowLane />
 
@@ -108,9 +117,6 @@ export default function TodayPage() {
             <div className="section-head">
               <h2>Opportunities to decide</h2>
               <span className="pill">ranked by Advantage</span>
-              <Link href="/" className="btn btn-ghost btn-sm" style={{ marginLeft: 'auto', textDecoration: 'none' }}>
-                View all <Icons.chev size={12} />
-              </Link>
             </div>
             <div className="opp-grid">
               {topOpps.map((opp, i) => (

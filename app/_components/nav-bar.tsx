@@ -20,7 +20,6 @@ const NAV_GROUPS: NavGroup[] = [
   {
     items: [
       { href: '/today', label: 'Today', icon: Icons.inbox },
-      { href: '/', label: 'Opportunities', icon: Icons.grid },
       { href: '/pipeline', label: 'Pipeline', icon: Icons.flag },
       { href: '/explore', label: 'Discover', icon: Icons.compass },
     ],
