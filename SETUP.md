@@ -607,6 +607,33 @@ relevance is not applied at all — nothing is hidden. If `EMBEDDINGS_API_KEY` i
 set, an embeddings pre-screen cheaply drops clearly off-niche items before the
 Haiku call; otherwise Haiku does the whole judgement. No new required env.
 
+### 2b-duovicies. Migration for the relevance + buyer-intent gate (v2)
+
+The gate is now two clean filters: **buyer-intent** (with explicit
+maker/self-promo detection) cached per post, and **relevance** computed against
+the *active project* at query time via embedding cosine (so it's never a single
+global value baked onto a post). It also lets you **disqualify** a lead with a
+reason so off-niche/non-buyer rows disappear from the default views. Run once:
+
+```sql
+alter table posts add column if not exists embedding jsonb;        -- if not already present
+alter table leads add column if not exists disqualified boolean not null default false;
+alter table leads add column if not exists disq_reason text;
+create index if not exists leads_disqualified_idx on leads (disqualified);
+```
+
+Null-tolerant + additive:
+- `posts.embedding` caches each post's embedding vector (computed lazily when
+  `EMBEDDINGS_API_KEY` is set); with no key, relevance falls back to a cheap
+  Haiku yes/no, and a missing column just means no caching.
+- `leads.disqualified` / `disq_reason` default to keeping every existing row; the
+  one-off purge ([POST /api/leads/purge](app/api/leads/purge/route.ts)) flags
+  off-niche/non-buyer leads so they drop out of the board without being deleted.
+- The earlier `on_niche` columns (§2b-unvicies) are now unused but harmless —
+  relevance is computed at query time, not cached on the post.
+
+`HOT_NOW_WINDOW_HOURS` (optional env, default `6`) tightens the Hot-now window.
+
 ### 2c. Get the credentials
 
 1. Left sidebar → **Settings** → **API**.
