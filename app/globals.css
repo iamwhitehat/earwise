@@ -1423,6 +1423,34 @@ a.accent-link:focus-visible {
 .leads-qualify-out[open] > summary { margin-bottom: 8px; }
 .leads-qualify-out > .lead-card { opacity: .72; }
 
+/* Collapsible sidebar group (Advanced) */
+.side-label-btn {
+  display: flex; align-items: center; gap: 6px; width: 100%;
+  background: none; border: none; cursor: pointer; font: inherit; text-align: left;
+}
+.side-label-chev { transition: transform .15s; opacity: .7; }
+.side-label-chev.open { transform: rotate(90deg); }
+@media (prefers-reduced-motion: reduce) { .side-label-chev { transition: none; } }
+
+/* Today triage (redesign · Zaslon 1) */
+.today-since { margin: 0 0 var(--gap); font-size: 13px; color: var(--ink-3); }
+.today-fresh { font-size: 11.5px; color: var(--ink-4); font-variant-numeric: tabular-nums; }
+.today-card {
+  display: flex; align-items: center; gap: 12px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 14px 16px;
+}
+.today-card-main { flex: 1; min-width: 0; }
+.today-card-type { font-size: 11px; color: var(--ink-4); text-transform: uppercase; letter-spacing: 0.05em; }
+.today-card-title { margin: 3px 0 0; font-size: 14px; color: var(--ink); }
+.today-keys {
+  margin: var(--gap) 0 8px; font-size: 11px; color: var(--ink-4);
+  font-family: var(--font-geist-mono), monospace;
+}
+.today-keys kbd {
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: 5px;
+  padding: 1px 5px; font: inherit; font-size: 10.5px; color: var(--ink-3);
+}
+
 /* Command palette ⌘K (global shell) */
 .cmdk-trigger {
   display: flex; align-items: center; gap: 8px; width: 100%;

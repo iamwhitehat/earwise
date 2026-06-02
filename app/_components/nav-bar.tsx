@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useScanCtx, useWatchlistCtx } from './scan-provider'
@@ -8,39 +9,29 @@ import { ThemeToggle } from './theme-toggle'
 import { ProjectSwitcher } from './project-switcher'
 import { Icons, Spinner, type SimpleIconProps } from './icons'
 
-// Dark, vertical sidebar. The information architecture mirrors the funnel a
-// founder actually walks — Discover → Opportunities → Customer Voice → Act —
-// rather than a flat list of features. Folded-in destinations (Insights under
-// Opportunities, the raw Signal feed under Act) render as nested sub-items.
-type NavLink = { href: string; label: string; icon: (p: SimpleIconProps) => React.ReactNode; sub?: boolean }
-type NavGroup = { label: string; items: NavLink[] }
+// Dark, vertical sidebar. The information architecture is the redesign's
+// triage-first shell (REDESIGN-SPEC › Global shell): Today / Opportunities /
+// Pipeline up top, everything else folded into a collapsible "Advanced" group.
+// Every existing route stays reachable.
+type NavLink = { href: string; label: string; icon: (p: SimpleIconProps) => React.ReactNode }
+type NavGroup = { label?: string; items: NavLink[]; collapsible?: boolean }
 
 const NAV_GROUPS: NavGroup[] = [
   {
-    label: 'Discover',
-    items: [{ href: '/explore', label: 'Discover', icon: Icons.compass }],
-  },
-  {
-    label: 'Opportunities',
     items: [
+      { href: '/today', label: 'Today', icon: Icons.inbox },
       { href: '/', label: 'Opportunities', icon: Icons.grid },
-      { href: '/insights', label: 'Trends & Insights', icon: Icons.sparkles, sub: true },
+      { href: '/leads', label: 'Pipeline', icon: Icons.flag },
+      { href: '/explore', label: 'Discover', icon: Icons.compass },
     ],
   },
   {
-    label: 'Customer Voice',
-    items: [{ href: '/customer-voice', label: 'Customer Voice', icon: Icons.chat }],
-  },
-  {
-    label: 'Act',
+    label: 'Advanced',
+    collapsible: true,
     items: [
-      { href: '/leads', label: 'Leads', icon: Icons.inbox },
-      { href: '/signals', label: 'Signal feed', icon: Icons.bolt, sub: true },
-    ],
-  },
-  {
-    label: 'More',
-    items: [
+      { href: '/insights', label: 'Trends & Insights', icon: Icons.sparkles },
+      { href: '/customer-voice', label: 'Customer Voice', icon: Icons.chat },
+      { href: '/signals', label: 'Signal feed', icon: Icons.bolt },
       { href: '/digest', label: 'Digest', icon: Icons.bell },
       { href: '/guide', label: 'Guide', icon: Icons.flag },
     ],
@@ -56,6 +47,7 @@ export function NavBar() {
   const { watchlist } = useWatchlistCtx()
   const scan = useScanCtx()
   const { open: sidebarOpen, closeSidebar } = useSidebarCtx()
+  const [advancedOpen, setAdvancedOpen] = useState(false)
 
   const counts: Record<string, number> = {}
   for (const sub of watchlist) {
@@ -112,26 +104,43 @@ export function NavBar() {
         <kbd className="cmdk-kbd">⌘K</kbd>
       </button>
 
-      {NAV_GROUPS.map((group) => (
-        <div key={group.label}>
-          <div className="side-label">{group.label}</div>
-          {group.items.map((item) => {
-            const Icon = item.icon
-            const active = isActive(pathname, item.href)
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`nav-item${item.sub ? ' nav-sub' : ''}${active ? ' active' : ''}`}
-                aria-current={active ? 'page' : undefined}
-              >
-                <Icon />
-                {item.label}
-              </Link>
-            )
-          })}
-        </div>
-      ))}
+      {NAV_GROUPS.map((group, gi) => {
+        const collapsed = group.collapsible ? !advancedOpen : false
+        return (
+          <div key={group.label ?? gi}>
+            {group.label &&
+              (group.collapsible ? (
+                <button
+                  type="button"
+                  className="side-label side-label-btn"
+                  onClick={() => setAdvancedOpen((o) => !o)}
+                  aria-expanded={advancedOpen}
+                >
+                  {group.label}
+                  <Icons.chev size={12} className={`side-label-chev${advancedOpen ? ' open' : ''}`} />
+                </button>
+              ) : (
+                <div className="side-label">{group.label}</div>
+              ))}
+            {!collapsed &&
+              group.items.map((item) => {
+                const Icon = item.icon
+                const active = isActive(pathname, item.href)
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={`nav-item${active ? ' active' : ''}`}
+                    aria-current={active ? 'page' : undefined}
+                  >
+                    <Icon />
+                    {item.label}
+                  </Link>
+                )
+              })}
+          </div>
+        )
+      })}
 
       <div className="side-label">Watchlist · {watchlist.length}</div>
       <div className="side-watch">
