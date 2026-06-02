@@ -20,8 +20,9 @@ export async function loadHotSignals(
     loadSignals(db, { ageMs: opts.windowMs }),
     loadMemoryFacts(db, projectId),
   ])
-  // Buyer-intent gate before scoring so Hot-now only ever shows genuine buyers.
-  const gated = await gateSignals(db, signals)
+  // Relevance + buyer-intent gate before scoring so Hot-now only ever shows
+  // on-niche genuine buyers.
+  const gated = await gateSignals(db, signals, { projectId })
   const memText = fitText(memFacts)
   const scored = gated.map((s) =>
     scoreSignal(s, computeFitToYou(memText, `${s.topic ?? ''} ${s.text}`)),

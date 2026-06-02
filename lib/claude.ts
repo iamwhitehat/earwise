@@ -22,10 +22,10 @@ import type {
 } from './insight-types'
 import type { StrategyBrief } from './strategy'
 import {
-  BUYER_INTENT_SYSTEM_PROMPT,
-  buildBuyerIntentInput,
-  normalizeBuyerVerdicts,
-  type BuyerIntentResult,
+  SIGNAL_GATE_SYSTEM_PROMPT,
+  buildSignalGateInput,
+  normalizeSignalVerdicts,
+  type SignalVerdict,
 } from './buyer-intent'
 
 export type { Category }
@@ -1418,13 +1418,13 @@ export async function draftObjectionResponse(opts: {
   return cleanDraft(out?.message)
 }
 
-// ─── Buyer-intent gate (Haiku) ───────────────────────────────────────────────
-// Second-pass filter over intent-matched signals: confirm a genuine buyer vs
-// noise. Batched (N items/call) via the tool runner — no regex JSON.
+// ─── Signal gate (Haiku) — relevance + buyer-intent in one pass ──────────────
+// Second-pass filter over intent-matched signals: confirm on-niche AND genuine
+// buyer. Batched (N items/call) via the tool runner — no regex JSON.
 
-const BUYER_INTENT_TOOL: StructuredTool = {
-  name: 'report_buyer_intent',
-  description: 'Classify which numbered posts/comments are genuine buyers actively seeking or willing to pay for a solution.',
+const SIGNAL_GATE_TOOL: StructuredTool = {
+  name: 'report_signal_gate',
+  description: 'For each numbered post/comment, report whether it is on the founder’s niche and a genuine buyer.',
   input_schema: {
     type: 'object',
     properties: {
@@ -1434,10 +1434,11 @@ const BUYER_INTENT_TOOL: StructuredTool = {
           type: 'object',
           properties: {
             index: { type: 'integer', description: '1-based item number' },
+            on_niche: { type: 'boolean' },
             is_buyer: { type: 'boolean' },
             confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
           },
-          required: ['index', 'is_buyer'],
+          required: ['index', 'on_niche', 'is_buyer'],
         },
       },
     },
@@ -1445,20 +1446,21 @@ const BUYER_INTENT_TOOL: StructuredTool = {
   },
 }
 
-/** Classify a batch of signals as genuine buyers or not. Returns a result per
- *  input item (null where the model didn't return a verdict). */
-export async function classifyBuyerIntent(
+/** Classify a batch of signals on two axes — on-niche + genuine buyer — given
+ *  the founder's niche. Returns a result per input item (null when unscored). */
+export async function classifySignalGate(
   items: { text: string }[],
-): Promise<(BuyerIntentResult | null)[]> {
+  niche: string,
+): Promise<(SignalVerdict | null)[]> {
   if (items.length === 0) return []
   const input = await callStructured(
     MODEL_BULK,
-    BUYER_INTENT_SYSTEM_PROMPT,
-    buildBuyerIntentInput(items),
-    BUYER_INTENT_TOOL,
+    SIGNAL_GATE_SYSTEM_PROMPT,
+    buildSignalGateInput(niche, items),
+    SIGNAL_GATE_TOOL,
     1500,
   )
-  return normalizeBuyerVerdicts(input, items.length)
+  return normalizeSignalVerdicts(input, items.length)
 }
 
 const COMMENT_INSIGHTS_TOOL: StructuredTool = {
