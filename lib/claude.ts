@@ -27,6 +27,11 @@ import {
   normalizeBuyerVerdicts,
   type BuyerIntentResult,
 } from './buyer-intent'
+import {
+  RELEVANCE_SYSTEM_PROMPT,
+  buildRelevanceInput,
+  normalizeRelevanceVerdicts,
+} from './relevance'
 
 export type { Category }
 export type { InsightV2, MessagingAssets }
@@ -1461,6 +1466,46 @@ export async function classifyBuyerIntent(
     1500,
   )
   return normalizeBuyerVerdicts(input, items.length)
+}
+
+const RELEVANCE_TOOL: StructuredTool = {
+  name: 'report_relevance',
+  description: "For each numbered item, report whether it's on the founder's niche AND a potential customer.",
+  input_schema: {
+    type: 'object',
+    properties: {
+      verdicts: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            index: { type: 'integer', description: '1-based item number' },
+            relevant: { type: 'boolean' },
+            reason: { type: 'string' },
+          },
+          required: ['index', 'relevant'],
+        },
+      },
+    },
+    required: ['verdicts'],
+  },
+}
+
+/** Haiku fallback relevance check (used when no embeddings key). Given the
+ *  founder's niche, judge each item on-niche + potential customer. */
+export async function classifyRelevance(
+  items: { text: string }[],
+  niche: string,
+): Promise<({ relevant: boolean; reason: string } | null)[]> {
+  if (items.length === 0) return []
+  const input = await callStructured(
+    MODEL_BULK,
+    RELEVANCE_SYSTEM_PROMPT,
+    buildRelevanceInput(niche, items),
+    RELEVANCE_TOOL,
+    1500,
+  )
+  return normalizeRelevanceVerdicts(input, items.length)
 }
 
 const COMMENT_INSIGHTS_TOOL: StructuredTool = {
