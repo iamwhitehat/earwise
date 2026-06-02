@@ -119,7 +119,7 @@ export default function TodayPage() {
                   opp={opp}
                   rank={i}
                   selected={false}
-                  onSelect={() => router.push('/')}
+                  onSelect={() => router.push(`/opportunities/${encodeURIComponent(opp.topic)}`)}
                 />
               ))}
             </div>

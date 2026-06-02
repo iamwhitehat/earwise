@@ -706,14 +706,17 @@ export function AdvantageOpportunityCard({
         </button>
       </div>
       <div className="adv-actions">
-        <button
-          type="button"
-          className="adv-explain"
-          onClick={() => setOpen((o) => !o)}
-          aria-expanded={open}
-        >
-          {open ? 'Hide breakdown' : 'Explain score'}
-        </button>
+        <span style={{ display: 'inline-flex', gap: 12, alignItems: 'center' }}>
+          <button
+            type="button"
+            className="adv-explain"
+            onClick={() => setOpen((o) => !o)}
+            aria-expanded={open}
+          >
+            {open ? 'Hide breakdown' : 'Explain score'}
+          </button>
+          <a className="adv-open" href={`/opportunities/${encodeURIComponent(opp.topic)}`}>Open →</a>
+        </span>
         <PursueParkActions opp={opp} />
       </div>
       {open && <AdvantageBreakdown opp={opp} />}
