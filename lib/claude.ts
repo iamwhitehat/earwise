@@ -21,6 +21,12 @@ import type {
   MessagingAsset,
 } from './insight-types'
 import type { StrategyBrief } from './strategy'
+import {
+  BUYER_INTENT_SYSTEM_PROMPT,
+  buildBuyerIntentInput,
+  normalizeBuyerVerdicts,
+  type BuyerIntentResult,
+} from './buyer-intent'
 
 export type { Category }
 export type { InsightV2, MessagingAssets }
@@ -1410,6 +1416,49 @@ export async function draftObjectionResponse(opts: {
     400,
   )
   return cleanDraft(out?.message)
+}
+
+// ─── Buyer-intent gate (Haiku) ───────────────────────────────────────────────
+// Second-pass filter over intent-matched signals: confirm a genuine buyer vs
+// noise. Batched (N items/call) via the tool runner — no regex JSON.
+
+const BUYER_INTENT_TOOL: StructuredTool = {
+  name: 'report_buyer_intent',
+  description: 'Classify which numbered posts/comments are genuine buyers actively seeking or willing to pay for a solution.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      verdicts: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            index: { type: 'integer', description: '1-based item number' },
+            is_buyer: { type: 'boolean' },
+            confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
+          },
+          required: ['index', 'is_buyer'],
+        },
+      },
+    },
+    required: ['verdicts'],
+  },
+}
+
+/** Classify a batch of signals as genuine buyers or not. Returns a result per
+ *  input item (null where the model didn't return a verdict). */
+export async function classifyBuyerIntent(
+  items: { text: string }[],
+): Promise<(BuyerIntentResult | null)[]> {
+  if (items.length === 0) return []
+  const input = await callStructured(
+    MODEL_BULK,
+    BUYER_INTENT_SYSTEM_PROMPT,
+    buildBuyerIntentInput(items),
+    BUYER_INTENT_TOOL,
+    1500,
+  )
+  return normalizeBuyerVerdicts(input, items.length)
 }
 
 const COMMENT_INSIGHTS_TOOL: StructuredTool = {

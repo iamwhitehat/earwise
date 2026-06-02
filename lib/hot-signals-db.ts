@@ -5,6 +5,7 @@ import 'server-only'
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { loadSignals } from './signals-db'
+import { gateSignals } from './buyer-intent-db'
 import { scoreSignal, rankHotSignals, type HotSignal } from './hot-signals'
 import { computeFitToYou } from './advantage'
 import { fitText, DEFAULT_PROJECT } from './memory'
@@ -19,8 +20,10 @@ export async function loadHotSignals(
     loadSignals(db, { ageMs: opts.windowMs }),
     loadMemoryFacts(db, projectId),
   ])
+  // Buyer-intent gate before scoring so Hot-now only ever shows genuine buyers.
+  const gated = await gateSignals(db, signals)
   const memText = fitText(memFacts)
-  const scored = signals.map((s) =>
+  const scored = gated.map((s) =>
     scoreSignal(s, computeFitToYou(memText, `${s.topic ?? ''} ${s.text}`)),
   )
   return rankHotSignals(scored, { limit: opts.limit, minScore: opts.minScore })

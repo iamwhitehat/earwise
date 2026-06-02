@@ -2,6 +2,7 @@ import type { NextRequest } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
 import { INTENT_TYPES, type IntentType } from '@/lib/intent-patterns'
 import { loadSignals, type SignalRow } from '@/lib/signals-db'
+import { gateSignals } from '@/lib/buyer-intent-db'
 
 const MAX_RESULTS = 100
 
@@ -52,8 +53,11 @@ export async function GET(req: NextRequest) {
     return Response.json({ error: err instanceof Error ? err.message : 'Query failed' }, { status: 500 })
   }
 
+  // Buyer-intent gate: keep only genuine buyers (pass-through pre-migration).
+  const gated = await gateSignals(db, signals)
+
   // Newest first (loadSignals already sorts), trim, and surface the subs present.
-  const trimmed = signals.slice(0, MAX_RESULTS)
+  const trimmed = gated.slice(0, MAX_RESULTS)
   const subs = Array.from(new Set(trimmed.map((s) => s.subreddit))).sort()
 
   return Response.json({ signals: trimmed, subs })
