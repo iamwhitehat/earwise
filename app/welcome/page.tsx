@@ -252,7 +252,7 @@ export default function WelcomeWizard() {
                 <div className="wiz-next">
                   <span className="wiz-next-label">Next:</span>
                   <Link href="/" className="btn btn-primary btn-sm">See full dashboard</Link>
-                  <Link href="/leads" className="btn btn-ghost btn-sm">Find leads to contact</Link>
+                  <Link href="/pipeline" className="btn btn-ghost btn-sm">Find leads to contact</Link>
                   <Link href="/customer-voice" className="btn btn-ghost btn-sm">Hear customer voice</Link>
                 </div>
               </>

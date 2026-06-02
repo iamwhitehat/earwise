@@ -1022,7 +1022,7 @@ export function HotNowLane({ window = '24h', limit = 6 }: { window?: string; lim
                   <div className="hotnow-opener-actions">
                     <CopyButton text={r.opener} />
                     <a className="btn btn-ghost btn-sm" href={s.permalink} target="_blank" rel="noopener noreferrer">Open thread ↗</a>
-                    <a className="btn btn-ghost btn-sm" href="/leads">View in pipeline</a>
+                    <a className="btn btn-ghost btn-sm" href="/pipeline">View in pipeline</a>
                   </div>
                 </div>
               )}

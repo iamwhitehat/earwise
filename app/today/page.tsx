@@ -96,7 +96,7 @@ export default function TodayPage() {
                     : `${contacted} contacted — follow up while it's warm`}
                 </p>
               </div>
-              <Link href="/leads" className="btn btn-primary btn-sm">
+              <Link href="/pipeline" className="btn btn-primary btn-sm">
                 {newLeads > 0 ? 'Draft openers' : 'Open pipeline'}
               </Link>
             </div>

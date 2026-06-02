@@ -1423,6 +1423,25 @@ a.accent-link:focus-visible {
 .leads-qualify-out[open] > summary { margin-bottom: 8px; }
 .leads-qualify-out > .lead-card { opacity: .72; }
 
+/* Pipeline (redesign · Zaslon 3) */
+.seg { display: inline-flex; gap: 2px; padding: 3px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 99px; }
+.seg-btn {
+  font: inherit; font-size: 13px; font-weight: 500; text-decoration: none;
+  padding: 5px 14px; border-radius: 99px; color: var(--ink-3); transition: background .12s, color .12s;
+}
+.seg-btn:hover { color: var(--ink); }
+.seg-btn.on { background: var(--accent); color: var(--on-signal, #0E0F13); font-weight: 600; }
+.pipe-actions { display: flex; justify-content: flex-end; margin-bottom: var(--gap); }
+
+/* Status dot (lead board columns / pills) — neutral chip + colored dot */
+.status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 99px; margin-right: 7px; vertical-align: middle; background: var(--ink-4); }
+.status-dot.status-new { background: #8A93A0; }
+.status-dot.status-contacted { background: #C9A227; }
+.status-dot.status-replied { background: #9BE22A; }
+.status-dot.status-call { background: var(--accent); }
+.status-dot.status-customer { background: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.status-dot.status-passed { background: #5A5F66; }
+
 /* Collapsible sidebar group (Advanced) */
 .side-label-btn {
   display: flex; align-items: center; gap: 6px; width: 100%;

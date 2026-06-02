@@ -70,7 +70,7 @@ export function CommandPalette() {
     () => [
       { id: 'today', label: 'Today', hint: 'triage', run: () => { router.push('/today'); close() } },
       { id: 'opps', label: 'Opportunities', hint: 'dashboard', run: () => { router.push('/'); close() } },
-      { id: 'pipeline', label: 'Pipeline · Leads', run: () => { router.push('/leads'); close() } },
+      { id: 'pipeline', label: 'Pipeline · Leads', run: () => { router.push('/pipeline'); close() } },
       { id: 'voice', label: 'Customer Voice', run: () => { router.push('/customer-voice'); close() } },
       { id: 'insights', label: 'Insights', run: () => { router.push('/insights'); close() } },
       { id: 'signals', label: 'Signal feed', run: () => { router.push('/signals'); close() } },
@@ -96,7 +96,7 @@ export function CommandPalette() {
         void fetch('/api/opportunities/refresh', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
       },
     })
-    cmds.push({ id: 'leads', label: 'Add top signals to Leads', run: () => { router.push('/leads'); close() } })
+    cmds.push({ id: 'leads', label: 'Add top signals to Leads', run: () => { router.push('/pipeline'); close() } })
     return cmds
   }, [scan, router, close])
 
