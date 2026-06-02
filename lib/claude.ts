@@ -1324,6 +1324,94 @@ export async function draftOpener(opts: OpenerInput): Promise<string | null> {
   }
 }
 
+// ─── Conversation drafts (Convert #3) — follow-ups + objection responses ─────
+// Both go through the schema-enforced tool runner (no regex JSON), grounded in
+// the real thread + the founder's offer from business memory.
+
+const DRAFT_MESSAGE_TOOL: StructuredTool = {
+  name: 'report_message',
+  description: 'Return a single short message to send to the person.',
+  input_schema: {
+    type: 'object',
+    properties: { message: { type: 'string', description: 'The drafted message text.' } },
+    required: ['message'],
+  },
+}
+
+const FOLLOW_UP_SYSTEM_PROMPT = `You write a SHORT follow-up nudge to someone you already messaged on Reddit and who hasn't replied yet.
+
+Rules:
+- Add value or a new angle — never "just checking in" or guilt.
+- Reference their original problem in their words; stay helpful-first.
+- End with one easy, low-pressure question.
+- Plain conversational prose, no greeting/sign-off, under 70 words, no emojis.
+Return only the message via the report_message tool.`
+
+const OBJECTION_SYSTEM_PROMPT = `You write a brief, honest response to a specific objection a potential buyer has about tools in your space.
+
+Rules:
+- Acknowledge the objection as legitimate first — no defensiveness, no hard sell.
+- Reframe with a concrete, specific point; it's fine to concede tradeoffs.
+- Helpful peer tone, not salesy. Plain prose, no greeting/sign-off, under 70 words, no emojis.
+Return only the message via the report_message tool.`
+
+function cleanDraft(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null
+  const cleaned = raw.trim().replace(/^["'`]+|["'`]+$/g, '').trim()
+  return cleaned.length > 0 ? cleaned : null
+}
+
+export async function draftFollowUp(opts: {
+  subreddit: string
+  author: string
+  theirPost: string
+  priorMessages?: { role: 'outbound' | 'inbound'; body: string }[]
+  offer?: string | null
+}): Promise<string | null> {
+  const thread = (opts.priorMessages ?? [])
+    .map((m) => `${m.role === 'outbound' ? 'You' : 'Them'}: ${m.body}`)
+    .join('\n')
+  const userContent =
+    `Subreddit: r/${opts.subreddit}\n` +
+    `Person: u/${opts.author || 'unknown'}\n\n` +
+    `Their original post:\n${opts.theirPost.trim().slice(0, 1500)}\n\n` +
+    `Conversation so far:\n${thread || '(only your opener has been sent)'}\n` +
+    (opts.offer ? `\nWhat you offer (context — don't hard-pitch): ${opts.offer}\n` : '') +
+    `\nWrite the follow-up nudge.`
+  const out = await callStructured<{ message?: unknown }>(
+    MODEL_BULK,
+    FOLLOW_UP_SYSTEM_PROMPT,
+    userContent,
+    DRAFT_MESSAGE_TOOL,
+    400,
+  )
+  return cleanDraft(out?.message)
+}
+
+export async function draftObjectionResponse(opts: {
+  subreddit: string
+  author: string
+  objection: string
+  theirPost?: string | null
+  offer?: string | null
+}): Promise<string | null> {
+  const userContent =
+    `Subreddit: r/${opts.subreddit}\n` +
+    `Person: u/${opts.author || 'unknown'}\n` +
+    (opts.theirPost ? `\nTheir post:\n${opts.theirPost.trim().slice(0, 1200)}\n` : '') +
+    `\nObjection to address: "${opts.objection.trim().slice(0, 300)}"\n` +
+    (opts.offer ? `\nWhat you offer (context — don't hard-pitch): ${opts.offer}\n` : '') +
+    `\nWrite the response to this objection.`
+  const out = await callStructured<{ message?: unknown }>(
+    MODEL_BULK,
+    OBJECTION_SYSTEM_PROMPT,
+    userContent,
+    DRAFT_MESSAGE_TOOL,
+    400,
+  )
+  return cleanDraft(out?.message)
+}
+
 const COMMENT_INSIGHTS_TOOL: StructuredTool = {
   name: 'report_comment_insights',
   description: 'Return tools mentioned, buying-intent quotes, and per-comment classifications.',

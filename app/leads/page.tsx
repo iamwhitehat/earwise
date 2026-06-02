@@ -13,6 +13,14 @@ import {
   type Lead,
   type LeadStatus,
 } from '@/lib/leads'
+import {
+  dueFollowUps,
+  suggestedNextStep,
+  SEQUENCE_STEP_LABEL,
+  type SequenceStep,
+} from '@/lib/follow-ups'
+import { type LeadMessage, type MessageKind } from '@/lib/lead-messages'
+import type { ObjectionEntry } from '@/lib/objections'
 import type { Category } from '@/lib/categories'
 
 const TOP_SIGNALS_TO_ADD = 15
@@ -185,6 +193,8 @@ export default function LeadsPage() {
           </div>
         )}
 
+        {!loading && hasLeads && <NeedsFollowUp leads={leads} onPatch={patchLead} />}
+
         {!loading && hasLeads && (
           <div className="leads-board scroll">
             {LEAD_STATUSES.map((status) => (
@@ -248,6 +258,7 @@ function LeadCard({
   const [sent, setSent] = useState(false)
   const [notes, setNotes] = useState(lead.notes ?? '')
   const [savingNotes, setSavingNotes] = useState(false)
+  const [showConvo, setShowConvo] = useState(false)
 
   // Highlight phrase derived from the excerpt (leads don't persist the
   // matched phrase) — reuse the signal intent-pattern matcher.
@@ -442,6 +453,264 @@ function LeadCard({
         rows={2}
       />
       {savingNotes && <span className="lead-notes-saving">Saving…</span>}
+
+      <button
+        type="button"
+        className="lead-convo-toggle"
+        onClick={() => setShowConvo((s) => !s)}
+        aria-expanded={showConvo}
+      >
+        <Icons.chat size={12} /> {showConvo ? 'Hide conversation' : 'Conversation'}
+      </button>
+      {showConvo && <LeadConversation lead={lead} onPatch={onPatch} />}
     </article>
+  )
+}
+
+// ─── Needs-follow-up queue (Convert #3) ──────────────────────────────────────
+
+function NeedsFollowUp({ leads, onPatch }: { leads: Lead[]; onPatch: (lead: Lead) => void }) {
+  const [drafting, setDrafting] = useState<number | null>(null)
+  const due = useMemo(() => dueFollowUps(leads), [leads])
+  if (due.length === 0) return null
+
+  async function draft(lead: Lead) {
+    setDrafting(lead.id)
+    try {
+      const res = await fetch(`/api/leads/${lead.id}/follow-up`, { method: 'POST' })
+      const json = await res.json()
+      if (res.ok && (json as { lead?: Lead }).lead) onPatch((json as { lead: Lead }).lead)
+    } catch {
+      /* leave in queue to retry */
+    } finally {
+      setDrafting(null)
+    }
+  }
+
+  return (
+    <section className="section needs-followup">
+      <div className="section-head">
+        <h2>Needs follow-up</h2>
+        <span className="pill">{due.length} waiting</span>
+        <span className="hint">contacted, no reply yet — nudge while it&apos;s warm</span>
+      </div>
+      <div className="followup-rows">
+        {due.map((lead) => (
+          <div className="followup-row" key={lead.id}>
+            <span className="followup-author">u/{lead.author}</span>
+            <SubChip sub={lead.subreddit} />
+            <span className="followup-age tnum">{formatAge(lead.lastEventAt)}</span>
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              onClick={() => draft(lead)}
+              disabled={drafting === lead.id}
+            >
+              {drafting === lead.id ? <><Spinner size={11} /> Drafting…</> : 'Draft follow-up'}
+            </button>
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+// ─── Conversation workspace (Convert #3) ─────────────────────────────────────
+
+const DISCOVERY_TEMPLATE =
+  "Really glad this resonates. Would you be up for a quick 15-min call this week so I can understand your setup and see if it's even a fit? No pitch — happy to just trade notes."
+
+const MESSAGE_KIND_LABEL: Record<MessageKind, string> = {
+  opener: 'Opener',
+  follow_up: 'Follow-up',
+  reply: 'Their reply',
+  objection_response: 'Objection response',
+  note: 'Note',
+}
+
+const COMPOSER_KINDS: MessageKind[] = ['note', 'reply', 'follow_up', 'objection_response']
+
+function LeadConversation({ lead, onPatch }: { lead: Lead; onPatch: (lead: Lead) => void }) {
+  const [messages, setMessages] = useState<LeadMessage[] | null>(null)
+  const [objections, setObjections] = useState<ObjectionEntry[]>([])
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [text, setText] = useState('')
+  const [composerKind, setComposerKind] = useState<MessageKind>('note')
+
+  const reload = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/leads/${lead.id}/messages`)
+      const json = await res.json()
+      if (res.ok) setMessages((json as { messages: LeadMessage[] }).messages)
+    } catch {
+      setMessages([])
+    }
+  }, [lead.id])
+
+  useEffect(() => {
+    reload()
+    fetch(`/api/leads/${lead.id}/objections`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { objections?: ObjectionEntry[] } | null) => {
+        if (j?.objections) setObjections(j.objections)
+      })
+      .catch(() => {})
+  }, [lead.id, reload])
+
+  const nextStep = suggestedNextStep({ status: lead.status, sequenceStep: lead.sequenceStep })
+
+  async function addMessage(role: 'outbound' | 'inbound', kind: MessageKind, body: string, sent = false) {
+    const res = await fetch(`/api/leads/${lead.id}/messages`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ role, kind, body, sent }),
+    })
+    const json = await res.json()
+    if (!res.ok) throw new Error(json.error ?? `Error ${res.status}`)
+    return json
+  }
+
+  async function draftNextStep() {
+    setBusy(true)
+    setError(null)
+    try {
+      if (nextStep === 'discovery_call') {
+        await addMessage('outbound', 'follow_up', DISCOVERY_TEMPLATE)
+      } else if (nextStep === 'opener') {
+        const res = await fetch(`/api/leads/${lead.id}/opener`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ action: 'generate' }),
+        })
+        const json = await res.json()
+        if (!res.ok) throw new Error(json.error ?? `Error ${res.status}`)
+        onPatch((json as { lead: Lead }).lead)
+        await addMessage('outbound', 'opener', (json as { opener: string }).opener)
+      } else {
+        // follow_up_1 / follow_up_2 → grounded follow-up draft + schedule
+        const res = await fetch(`/api/leads/${lead.id}/follow-up`, { method: 'POST' })
+        const json = await res.json()
+        if (!res.ok) throw new Error(json.error ?? `Error ${res.status}`)
+        if ((json as { lead?: Lead }).lead) onPatch((json as { lead: Lead }).lead)
+      }
+      await reload()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Draft failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function draftObjection(objection: string) {
+    setBusy(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/leads/${lead.id}/objections`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ objection }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? `Error ${res.status}`)
+      await reload()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Draft failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function markSent(messageId: number) {
+    try {
+      const res = await fetch(`/api/leads/${lead.id}/messages`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ action: 'mark-sent', messageId }),
+      })
+      if (res.ok) await reload()
+    } catch {
+      /* ignore */
+    }
+  }
+
+  async function submitComposer() {
+    const body = text.trim()
+    if (!body || busy) return
+    setBusy(true)
+    setError(null)
+    try {
+      const role = composerKind === 'reply' ? 'inbound' : 'outbound'
+      await addMessage(role, composerKind, body, role === 'outbound')
+      if (role === 'inbound' && (lead.status === 'new' || lead.status === 'contacted')) {
+        onPatch({ ...lead, status: 'replied' })
+      }
+      setText('')
+      await reload()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to add')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="convo">
+      <div className="convo-thread">
+        {messages === null && <div className="convo-empty">Loading thread…</div>}
+        {messages?.length === 0 && <div className="convo-empty">No messages yet — draft the next step below.</div>}
+        {messages?.map((m) => (
+          <div className={`convo-msg convo-${m.role}`} key={m.id}>
+            <div className="convo-msg-head">
+              <span className="convo-msg-kind">{MESSAGE_KIND_LABEL[m.kind]}</span>
+              {m.role === 'outbound' && (m.sent ? <span className="convo-sent">sent ✓</span> : <span className="convo-draft">draft</span>)}
+            </div>
+            <div className="convo-msg-body">{m.body}</div>
+            {m.role === 'outbound' && !m.sent && (
+              <button type="button" className="convo-marksent" onClick={() => markSent(m.id)}>Mark sent</button>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {error && <div className="convo-err">{error}</div>}
+
+      <div className="convo-actions">
+        <button type="button" className="btn btn-primary btn-sm" onClick={draftNextStep} disabled={busy}>
+          {busy ? <><Spinner size={11} /> Drafting…</> : <><Icons.sparkles size={12} /> {SEQUENCE_STEP_LABEL[nextStep as SequenceStep]}</>}
+        </button>
+      </div>
+
+      {objections.length > 0 && (
+        <div className="convo-objections">
+          <div className="convo-objections-label">Likely objections — draft a response</div>
+          <div className="convo-objection-chips">
+            {objections.slice(0, 4).map((o) => (
+              <button key={o.objection} type="button" className="convo-objection" onClick={() => draftObjection(o.objection)} disabled={busy} title={`${o.type} · seen ${o.count}×`}>
+                {o.objection.length > 60 ? `${o.objection.slice(0, 60)}…` : o.objection}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="convo-composer">
+        <select className="convo-kind" value={composerKind} onChange={(e) => setComposerKind(e.target.value as MessageKind)} aria-label="Message type">
+          {COMPOSER_KINDS.map((k) => (
+            <option key={k} value={k}>{MESSAGE_KIND_LABEL[k]}</option>
+          ))}
+        </select>
+        <textarea
+          className="convo-input"
+          placeholder={composerKind === 'reply' ? 'Paste their reply…' : 'Write a message or note…'}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          rows={2}
+        />
+        <button type="button" className="btn btn-ghost btn-sm" onClick={submitComposer} disabled={busy || !text.trim()}>
+          Add
+        </button>
+      </div>
+    </div>
   )
 }

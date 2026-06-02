@@ -3,6 +3,7 @@
 import 'server-only'
 
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { mapLeadRow, type Lead } from './leads'
 
 export const LEADS_MIGRATION_HINT =
   'If the message names a missing table or column, run the Leads migration in SETUP.md (section 2b-decies).'
@@ -11,6 +12,22 @@ export const LEADS_MIGRATION_HINT =
 // Convert-core score/tier/follow-up columns are picked up only once they exist,
 // and mapLeadRow falls back to nulls when they don't.
 export const LEAD_COLUMNS = '*'
+
+/** Load a single lead scoped to the active project. null when not found. */
+export async function loadLeadById(
+  db: SupabaseClient,
+  leadId: number,
+  projectId: string,
+): Promise<Lead | null> {
+  const { data, error } = await db
+    .from('leads')
+    .select(LEAD_COLUMNS)
+    .eq('id', leadId)
+    .eq('project_id', projectId)
+    .maybeSingle()
+  if (error || !data) return null
+  return mapLeadRow(data)
+}
 
 /** Best-effort persist of a computed Lead Score. Silently no-ops when the
  *  lead_score/tier columns aren't migrated yet (lazy backfill). */

@@ -100,3 +100,12 @@ export function fitText(facts: MemoryFact[]): string {
     .map((f) => f.fact)
     .join(' ')
 }
+
+/** The founder's offer (product + value prop) — grounds follow-up / objection
+ *  drafts. '' when there's no profile yet. */
+export function offerText(facts: MemoryFact[]): string {
+  return facts
+    .filter((f) => f.kind === 'product' || f.kind === 'value_prop')
+    .map((f) => f.fact)
+    .join('. ')
+}

@@ -12,7 +12,14 @@ export type EventKind =
   | 'lead_passed'
   | 'opportunity_pursued'
   | 'opportunity_parked'
+  // Conversation activity (Convert #3) — timing logs only. Deliberately NOT in
+  // EVENT_KINDS, so isValidEventKind/loadEvents exclude them from the funnel +
+  // recalibration. ('reply' above is reused for genuine inbound replies.)
+  | 'msg_outbound'
+  | 'follow_up_drafted'
+  | 'objection_drafted'
 
+// The outcome/funnel kinds that recalibration + the "what's working" panel read.
 export const EVENT_KINDS: EventKind[] = [
   'draft_sent',
   'reply',
