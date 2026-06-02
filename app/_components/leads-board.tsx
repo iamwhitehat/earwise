@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { SubChip, CategoryBadge, LeadScoreBadge, HotNowLane, FunnelStrip, WhatsWorkingPanel } from './components'
+import { SubChip, CategoryBadge, LeadScoreBadge, FunnelStrip, WhatsWorkingPanel } from './components'
 import { snippetWithHighlight, formatAge } from './signal-card'
 import { Icons, Spinner } from './icons'
 import { findFirstMatch } from '@/lib/intent-patterns'
@@ -134,10 +134,6 @@ export function LeadsBoard() {
         </button>
       </div>
 
-      <FunnelStrip />
-
-      <HotNowLane />
-
         {addNote && (
           <div className="card fade-in leads-note">{addNote}</div>
         )}
@@ -235,6 +231,7 @@ export function LeadsBoard() {
           </div>
         )}
 
+        <FunnelStrip />
         <WhatsWorkingPanel />
     </>
   )
