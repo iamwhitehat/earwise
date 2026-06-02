@@ -1490,6 +1490,16 @@ a.accent-link:focus-visible {
 .status-dot.status-customer { background: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
 .status-dot.status-passed { background: #5A5F66; }
 
+/* Compact Sources line (watchlist relocated to Discover) */
+.side-sep { height: 1px; background: var(--side-border); margin: 12px 4px 8px; }
+.side-sources {
+  display: flex; align-items: center; gap: 10px; padding: 7px 9px; border-radius: var(--r-sm);
+  color: var(--side-ink-2); font-size: 13px; font-weight: 500; text-decoration: none;
+}
+.side-sources svg { opacity: .8; flex-shrink: 0; }
+.side-sources:hover { background: var(--side-bg-2); color: var(--side-ink); }
+.side-sources-n { margin-left: auto; font-size: 11px; color: var(--side-ink-3); font-variant-numeric: tabular-nums; }
+
 /* Collapsible sidebar group (Advanced) */
 .side-label-btn {
   display: flex; align-items: center; gap: 6px; width: 100%;

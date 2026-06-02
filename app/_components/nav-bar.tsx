@@ -49,20 +49,7 @@ export function NavBar() {
   const { open: sidebarOpen, closeSidebar } = useSidebarCtx()
   const [advancedOpen, setAdvancedOpen] = useState(false)
 
-  const counts: Record<string, number> = {}
-  for (const sub of watchlist) {
-    counts[sub] = scan.buckets[sub]?.posts.length ?? 0
-  }
-
   const lastScanLabel = formatLastScan(scan.lastScanAt)
-
-  // Identify the active watchlist sub from /r/[sub]. Case-folded compare
-  // because seeded subs preserve their original case (`SaaS`) while
-  // user-added subs are normalized to lowercase by useWatchlist.addSubreddit.
-  const activeSubMatch = pathname.match(/^\/r\/([^/]+)/)
-  const activeSub = activeSubMatch
-    ? decodeURIComponent(activeSubMatch[1]).toLowerCase()
-    : null
 
   return (
     <aside
@@ -142,32 +129,12 @@ export function NavBar() {
         )
       })}
 
-      <div className="side-label">Watchlist · {watchlist.length}</div>
-      <div className="side-watch">
-        {watchlist.map((sub) => {
-          const isSubActive = activeSub === sub.toLowerCase()
-          return (
-            <Link
-              key={sub}
-              href={`/r/${sub}`}
-              className={`watch-row${isSubActive ? ' active' : ''}`}
-              aria-current={isSubActive ? 'page' : undefined}
-            >
-              <span className="watch-dot" />
-              <span className="mono">r/{sub}</span>
-              <span className="n">{counts[sub]}</span>
-            </Link>
-          )
-        })}
-        {watchlist.length === 0 && (
-          <div style={{ padding: '6px 9px', fontSize: 12, color: 'var(--side-ink-3)' }}>
-            No subs yet.{' '}
-            <Link href="/explore" style={{ color: 'var(--accent-ring)' }}>
-              Add some →
-            </Link>
-          </div>
-        )}
-      </div>
+      <div className="side-sep" />
+      <Link href="/explore" className="side-sources" title="Manage sources in Discover">
+        <Icons.compass size={14} />
+        <span>{watchlist.length === 0 ? 'Add sources' : 'Sources'}</span>
+        {watchlist.length > 0 && <span className="side-sources-n tnum">{watchlist.length}</span>}
+      </Link>
 
       <div className="side-foot">
         {scan.anyStreaming ? (
