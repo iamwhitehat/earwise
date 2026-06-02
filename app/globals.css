@@ -1451,6 +1451,36 @@ a.accent-link:focus-visible {
   padding: 1px 5px; font: inherit; font-size: 10.5px; color: var(--ink-3);
 }
 
+/* Right drawer (global shell) */
+.drawer-scrim {
+  position: fixed; inset: 0; z-index: 110; background: rgba(0,0,0,.45);
+  display: flex; justify-content: flex-end;
+  animation: drawer-fade .15s ease;
+}
+.drawer {
+  width: min(420px, 94vw); height: 100%; display: flex; flex-direction: column;
+  background: var(--surface); border-left: 1px solid var(--border);
+  box-shadow: -16px 0 50px rgba(0,0,0,.35);
+  animation: drawer-slide .2s cubic-bezier(.2,.8,.2,1);
+}
+.drawer-head {
+  display: flex; align-items: center; gap: 9px; flex-shrink: 0;
+  padding: 13px 14px; border-bottom: 1px solid var(--border);
+}
+.drawer-title { flex: 1; min-width: 0; font-size: 14px; font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.drawer-back, .drawer-close {
+  display: grid; place-items: center; width: 28px; height: 28px; flex-shrink: 0;
+  background: none; border: none; border-radius: var(--r-sm); color: var(--ink-3); cursor: pointer;
+}
+.drawer-back:hover, .drawer-close:hover { background: var(--surface-2); color: var(--ink); }
+.drawer-back-chev { transform: rotate(180deg); }
+.drawer-body { flex: 1; min-height: 0; overflow-y: auto; padding: 16px; }
+@keyframes drawer-fade { from { opacity: 0 } to { opacity: 1 } }
+@keyframes drawer-slide { from { transform: translateX(24px); opacity: .4 } to { transform: none; opacity: 1 } }
+@media (prefers-reduced-motion: reduce) {
+  .drawer-scrim, .drawer { animation: none; }
+}
+
 /* Command palette ⌘K (global shell) */
 .cmdk-trigger {
   display: flex; align-items: center; gap: 8px; width: 100%;
