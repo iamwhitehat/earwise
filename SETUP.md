@@ -521,6 +521,43 @@ memory, ranked opportunities, leads, and outcome events — under the `demo`
 project, then activates it. It reuses the tables above, so it needs this
 migration run first; it's idempotent (re-seeding replaces the demo rows).
 
+### 2b-undevicies. Migration for Convert-core (lead scoring + conversation)
+
+Closes the loop from "reply" to "paying customer": a **Lead Score** + tier on
+every lead, a follow-up sequence cursor, and a per-lead **message thread**.
+Additive — everything degrades gracefully before it's run (scores are computed
+on read and persisted lazily; the conversation thread just shows empty). Run
+once:
+
+```sql
+alter table leads add column if not exists lead_score int;
+alter table leads add column if not exists tier text check (tier in ('hot','warm','cold'));
+alter table leads add column if not exists next_follow_up_at timestamptz;
+alter table leads add column if not exists sequence_step int not null default 0;
+create index if not exists leads_score_idx   on leads (lead_score desc nulls last);
+create index if not exists leads_followup_idx on leads (next_follow_up_at) where next_follow_up_at is not null;
+
+create table if not exists lead_messages (
+  id         bigserial primary key,
+  lead_id    bigint not null references leads(id) on delete cascade,
+  role       text not null check (role in ('outbound','inbound')),
+  kind       text not null,   -- 'opener' | 'follow_up' | 'reply' | 'objection_response' | 'note'
+  body       text not null,
+  sent       boolean not null default false,
+  created_at timestamptz not null default now()
+);
+create index if not exists lead_messages_lead_idx on lead_messages (lead_id, created_at);
+```
+
+Tolerance: leads reads use `select('*')` so the new columns are picked up only
+once they exist; Lead Score is computed in-memory on every read (authoritative)
+and best-effort persisted when the columns are present — so the board sorts
+hot-first and shows tiers even before the migration, and "backfills" existing
+rows the first time it can write. The `lead_messages` thread, the follow-up
+queue, and objection suggestions tolerate the table being absent (empty thread,
+no due follow-ups). No new required env. Optional: set the email env (see §5)
+to also receive batched hot-signal alerts.
+
 ### 2c. Get the credentials
 
 1. Left sidebar → **Settings** → **API**.
