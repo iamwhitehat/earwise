@@ -33,7 +33,7 @@ const NAV_GROUPS: NavGroup[] = [
       { href: '/customer-voice', label: 'Customer Voice', icon: Icons.chat },
       { href: '/signals', label: 'Signal feed', icon: Icons.bolt },
       { href: '/digest', label: 'Digest', icon: Icons.bell },
-      { href: '/guide', label: 'Guide', icon: Icons.flag },
+      { href: '/pipeline?view=plan', label: 'Plan', icon: Icons.flag },
     ],
   },
 ]

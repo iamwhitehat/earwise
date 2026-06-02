@@ -165,8 +165,8 @@ export default function OpportunityWorkspace() {
     0: () => setTab('evidence'),
     1: () => setTab('competition'),
     2: () => setTab('voice'),
-    3: () => router.push('/leads'),
-    4: () => router.push('/leads'),
+    3: () => router.push('/pipeline?view=reach'),
+    4: () => router.push('/pipeline'),
     5: () => router.push('/insights'),
   }
 
@@ -214,7 +214,7 @@ export default function OpportunityWorkspace() {
                   <button type="button" className="btn btn-primary btn-sm" onClick={() => pursue('opportunity_pursued')}>Pursue</button>
                 )}
                 <button type="button" className="btn btn-ghost btn-sm" onClick={() => setTab('leads')}>Draft outreach</button>
-                <Link href="/guide" className="btn btn-ghost btn-sm" style={{ textDecoration: 'none' }}>Add to plan</Link>
+                <Link href="/pipeline?view=plan" className="btn btn-ghost btn-sm" style={{ textDecoration: 'none' }}>Add to plan</Link>
                 {pursued !== 'parked' && pursued !== 'pursued' && (
                   <button type="button" className="ws-park" onClick={() => pursue('opportunity_parked')}>Park</button>
                 )}
@@ -339,7 +339,7 @@ export default function OpportunityWorkspace() {
               <div className="ws-panel">
                 <Empty icon="flag" text="Generate a strategist plan scoped to this opportunity — positioning, ICP, messaging, 30/60/90, next 5 actions." />
                 <div style={{ textAlign: 'center' }}>
-                  <Link href="/guide" className="btn btn-primary" style={{ textDecoration: 'none' }}>Open the strategist</Link>
+                  <Link href="/pipeline?view=plan" className="btn btn-primary" style={{ textDecoration: 'none' }}>Open the strategist</Link>
                 </div>
               </div>
             )}

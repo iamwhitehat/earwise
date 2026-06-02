@@ -76,7 +76,7 @@ export function CommandPalette() {
       { id: 'signals', label: 'Signal feed', run: () => { router.push('/signals'); close() } },
       { id: 'explore', label: 'Discover · Explore', run: () => { router.push('/explore'); close() } },
       { id: 'digest', label: 'Digest', run: () => { router.push('/digest'); close() } },
-      { id: 'guide', label: 'Guide', run: () => { router.push('/guide'); close() } },
+      { id: 'guide', label: 'Plan', run: () => { router.push('/pipeline?view=plan'); close() } },
     ],
     [router, close],
   )

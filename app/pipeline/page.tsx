@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { Topbar } from '../_components/components'
 import { useScanCtx } from '../_components/scan-provider'
 import { LeadsBoard } from '../_components/leads-board'
+import { PlanView } from '../_components/plan-view'
 import { Icons } from '../_components/icons'
 
 // Pipeline (REDESIGN-SPEC › Zaslon 3): the act space, segmented into
@@ -44,7 +45,7 @@ function PipelineInner() {
 
       <div className="content scroll">
         {view === 'leads' && <LeadsBoard />}
-        {view === 'plan' && <PipelineStub icon="flag" text="The strategist plan lives here." />}
+        {view === 'plan' && <PlanView />}
         {view === 'reach' && <PipelineStub icon="compass" text="Operational distribution lives here." />}
       </div>
     </>
