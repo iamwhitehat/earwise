@@ -558,6 +558,30 @@ queue, and objection suggestions tolerate the table being absent (empty thread,
 no due follow-ups). No new required env. Optional: set the email env (see §5)
 to also receive batched hot-signal alerts.
 
+### 2b-vicies. Migration for the buyer-intent gate
+
+The intent-pattern match (e.g. "looking for", "would pay") is a cheap first
+pass that still lets through non-buyers — people answering, recommending their
+own tool, joking, or venting without seeking a solution. The gate adds a second
+pass: Haiku classifies each matched signal as a genuine buyer or not, and the
+verdict is cached on the existing `posts` / `post_comments` rows so it's a
+one-time cost per item. Run once:
+
+```sql
+alter table posts          add column if not exists buyer_intent text check (buyer_intent in ('buyer','not_buyer'));
+alter table posts          add column if not exists buyer_intent_at timestamptz;
+alter table post_comments  add column if not exists buyer_intent text check (buyer_intent in ('buyer','not_buyer'));
+alter table post_comments  add column if not exists buyer_intent_at timestamptz;
+create index if not exists posts_buyer_intent_idx         on posts (buyer_intent) where buyer_intent is not null;
+create index if not exists post_comments_buyer_intent_idx on post_comments (buyer_intent) where buyer_intent is not null;
+```
+
+Null-tolerant + lazy backfill: before the migration the gate reads the missing
+column, detects it, and degrades to pass-through (nothing is hidden). After it,
+each newly-surfaced signal is classified once (bounded per request), the verdict
+is stored, and the Signals feed + Hot-now keep only confirmed buyers (rows not
+yet classified pass through until they are). No new env.
+
 ### 2c. Get the credentials
 
 1. Left sidebar → **Settings** → **API**.
