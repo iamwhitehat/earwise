@@ -8,6 +8,7 @@ import { Icons, Spinner } from '../_components/icons'
 import { useScanCtx } from '../_components/scan-provider'
 import type { MaterializedOpportunity } from '@/lib/advantage'
 import { emptyStatusCounts, type LeadStatus } from '@/lib/leads'
+import type { StoredDigest } from '@/lib/digest-types'
 
 // Today — the triage inbox (REDESIGN-SPEC › Zaslon 1). A prioritized queue of
 // decisions, not a dashboard: hot signals to reply to, opportunities to
@@ -20,6 +21,21 @@ export default function TodayPage() {
   const [opps, setOpps] = useState<MaterializedOpportunity[] | null>(null)
   const [counts, setCounts] = useState<Record<LeadStatus, number>>(emptyStatusCounts())
   const [loading, setLoading] = useState(true)
+  const [digest, setDigest] = useState<StoredDigest | null>(null)
+
+  // Weekly brief, relocated from the Advanced nav onto Today as a compact card.
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/digest')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json: StoredDigest | null) => {
+        if (!cancelled && json) setDigest(json)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -83,6 +99,23 @@ export default function TodayPage() {
         </div>
 
         <HotNowLane />
+
+        {digest && (
+          <section className="section">
+            <Link href="/digest" className="today-digest" aria-label="Open the weekly digest">
+              <span className="today-digest-tag">This week</span>
+              <span className="today-digest-main">
+                <strong>State of your market</strong>
+                <span className="today-digest-sum">
+                  {digest.brief.moves.length} move{digest.brief.moves.length === 1 ? '' : 's'} ·{' '}
+                  {digest.brief.newOpportunities.length} opportunit{digest.brief.newOpportunities.length === 1 ? 'y' : 'ies'}
+                  {digest.brief.alerts.length > 0 ? ` · ${digest.brief.alerts.length} alert${digest.brief.alerts.length === 1 ? '' : 's'}` : ''}
+                </span>
+              </span>
+              <span className="today-digest-go">Open <Icons.chev size={12} /></span>
+            </Link>
+          </section>
+        )}
 
         {loading && (
           <div className="empty" style={{ padding: 40 }}>

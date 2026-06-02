@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useScanCtx, useWatchlistCtx } from './scan-provider'
@@ -32,11 +32,12 @@ const NAV_GROUPS: NavGroup[] = [
       { href: '/insights', label: 'Trends & Insights', icon: Icons.sparkles },
       { href: '/customer-voice', label: 'Customer Voice', icon: Icons.chat },
       { href: '/signals', label: 'Signal feed', icon: Icons.bolt },
-      { href: '/digest', label: 'Digest', icon: Icons.bell },
-      { href: '/pipeline?view=plan', label: 'Plan', icon: Icons.flag },
+      { href: '/digest', label: 'Digest archive', icon: Icons.bell },
     ],
   },
 ]
+
+const ADVANCED_KEY = 'earwise:advanced-open'
 
 function isActive(pathname: string, href: string): boolean {
   return href === '/' ? pathname === '/' : pathname.startsWith(href)
@@ -47,7 +48,32 @@ export function NavBar() {
   const { watchlist } = useWatchlistCtx()
   const scan = useScanCtx()
   const { open: sidebarOpen, closeSidebar } = useSidebarCtx()
+  // Advanced is collapsed by default; an explicit toggle persists, otherwise it
+  // auto-reveals once the first scan has completed (progressive disclosure).
   const [advancedOpen, setAdvancedOpen] = useState(false)
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(ADVANCED_KEY)
+      if (saved === 'true' || saved === 'false') setAdvancedOpen(saved === 'true')
+    } catch {
+      /* storage unavailable */
+    }
+  }, [])
+  const scanned = scan.posts.length > 0 || scan.lastScanAt != null
+  useEffect(() => {
+    try {
+      if (scanned && localStorage.getItem(ADVANCED_KEY) === null) setAdvancedOpen(true)
+    } catch {
+      /* storage unavailable */
+    }
+  }, [scanned])
+  function toggleAdvanced() {
+    setAdvancedOpen((o) => {
+      const next = !o
+      try { localStorage.setItem(ADVANCED_KEY, String(next)) } catch { /* ignore */ }
+      return next
+    })
+  }
 
   const lastScanLabel = formatLastScan(scan.lastScanAt)
 
@@ -100,7 +126,7 @@ export function NavBar() {
                 <button
                   type="button"
                   className="side-label side-label-btn"
-                  onClick={() => setAdvancedOpen((o) => !o)}
+                  onClick={toggleAdvanced}
                   aria-expanded={advancedOpen}
                 >
                   {group.label}
