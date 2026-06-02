@@ -1,20 +1,38 @@
 import { describe, it, expect } from 'vitest'
 import {
   isGenuineBuyer,
+  isBuyerRole,
+  verdictForRole,
+  makerPreflag,
   buildBuyerIntentInput,
   normalizeBuyerVerdicts,
-  buildNicheContext,
-  nicheKey,
-  buildSignalGateInput,
-  normalizeSignalVerdicts,
 } from './buyer-intent'
 
-describe('isGenuineBuyer', () => {
-  it('passes only the buyer verdict', () => {
+describe('isGenuineBuyer / verdictForRole / isBuyerRole', () => {
+  it('only the buyer role/verdict is a genuine buyer', () => {
     expect(isGenuineBuyer('buyer')).toBe(true)
     expect(isGenuineBuyer('not_buyer')).toBe(false)
     expect(isGenuineBuyer(null)).toBe(false)
-    expect(isGenuineBuyer(undefined)).toBe(false)
+    expect(verdictForRole('buyer')).toBe('buyer')
+    expect(verdictForRole('maker')).toBe('not_buyer')
+    expect(verdictForRole('discussion')).toBe('not_buyer')
+    expect(isBuyerRole('buyer')).toBe(true)
+    expect(isBuyerRole('maker')).toBe(false)
+  })
+})
+
+describe('makerPreflag', () => {
+  it('flags self-promo / maker tells (the RHYMEBOOK case)', () => {
+    expect(makerPreflag('I will not promote, but I built RHYMEBOOK, a rhyming app — feedback?')).toBe(true)
+    expect(makerPreflag("I made a little SaaS for X")).toBe(true)
+    expect(makerPreflag("I'm launching my tool next week")).toBe(true)
+    expect(makerPreflag('check out my app')).toBe(true)
+    expect(makerPreflag('we are looking for beta testers')).toBe(true)
+    expect(makerPreflag('my startup helps with onboarding')).toBe(true)
+  })
+  it('does NOT flag a genuine buyer asking for a tool', () => {
+    expect(makerPreflag('Looking for an AI tool to auto-triage our support tickets — any recs?')).toBe(false)
+    expect(makerPreflag("We're drowning in Zendesk tickets, what do you use?")).toBe(false)
   })
 })
 
@@ -25,82 +43,39 @@ describe('buildBuyerIntentInput', () => {
     expect(out).toContain('2. would pay')
   })
   it('caps long text', () => {
-    const out = buildBuyerIntentInput([{ text: 'x'.repeat(2000) }])
-    expect(out.length).toBeLessThan(700)
+    expect(buildBuyerIntentInput([{ text: 'x'.repeat(2000) }]).length).toBeLessThan(700)
   })
 })
 
-describe('normalizeBuyerVerdicts', () => {
-  it('aligns verdicts to input order by index', () => {
-    const raw = { verdicts: [
-      { index: 2, is_buyer: false, confidence: 'high' },
-      { index: 1, is_buyer: true },
-    ] }
-    const out = normalizeBuyerVerdicts(raw, 2)
-    expect(out[0]).toEqual({ verdict: 'buyer', confidence: 'medium' }) // default conf
-    expect(out[1]).toEqual({ verdict: 'not_buyer', confidence: 'high' })
+describe('normalizeBuyerVerdicts (role-based)', () => {
+  it('maps role per index; maker + discussion are not buyers, buyer is', () => {
+    const out = normalizeBuyerVerdicts(
+      { verdicts: [
+        { index: 1, role: 'buyer', intent: 'willing-to-pay', confidence: 'high' },
+        { index: 2, role: 'maker' },
+        { index: 3, role: 'discussion' }, // the mindset-ramble case
+      ] },
+      3,
+    )
+    expect(out[0]).toEqual({ role: 'buyer', isBuyer: true, confidence: 'high' })
+    expect(out[1]).toEqual({ role: 'maker', isBuyer: false, confidence: 'medium' })
+    expect(out[2]).toEqual({ role: 'discussion', isBuyer: false, confidence: 'medium' })
+  })
+  it('defaults unknown/junk role to discussion (not a buyer)', () => {
+    const out = normalizeBuyerVerdicts({ verdicts: [{ index: 1, role: 'whatever' }] }, 1)
+    expect(out[0]?.isBuyer).toBe(false)
+    expect(out[0]?.role).toBe('discussion')
   })
   it('ignores out-of-range / duplicate indexes and tolerates junk', () => {
     const out = normalizeBuyerVerdicts({ verdicts: [
-      { index: 5, is_buyer: true }, // out of range
-      { index: 1, is_buyer: true },
-      { index: 1, is_buyer: false }, // duplicate → first wins
+      { index: 9, role: 'buyer' },
+      { index: 1, role: 'buyer' },
+      { index: 1, role: 'maker' },
     ] }, 2)
-    expect(out[0]?.verdict).toBe('buyer')
+    expect(out[0]?.role).toBe('buyer')
     expect(out[1]).toBeNull()
   })
   it('returns all-null for a non-array payload', () => {
-    expect(normalizeBuyerVerdicts(null, 3)).toEqual([null, null, null])
-    expect(normalizeBuyerVerdicts({ verdicts: 'nope' }, 1)).toEqual([null])
-  })
-})
-
-describe('buildNicheContext', () => {
-  it('joins non-empty parts and collapses whitespace', () => {
-    expect(buildNicheContext(['AI support tools', null, '  founders  ', undefined])).toBe(
-      'AI support tools · founders',
-    )
-  })
-  it('is empty when there is nothing', () => {
-    expect(buildNicheContext([null, '', '   '])).toBe('')
-  })
-})
-
-describe('nicheKey', () => {
-  it('is stable + case/space-insensitive, empty for empty', () => {
-    expect(nicheKey('')).toBe('')
-    expect(nicheKey('AI support tools')).toBe(nicheKey('  ai   support tools '))
-  })
-  it('differs for different niches', () => {
-    expect(nicheKey('ai support tools')).not.toBe(nicheKey('e-commerce analytics'))
-  })
-})
-
-describe('buildSignalGateInput', () => {
-  it('prefixes the niche then the numbered items', () => {
-    const out = buildSignalGateInput('AI support', [{ text: 'looking for a tool' }])
-    expect(out).toContain("Founder's niche: AI support")
-    expect(out).toContain('1. looking for a tool')
-  })
-  it('omits the niche line when empty', () => {
-    expect(buildSignalGateInput('', [{ text: 'x' }]).startsWith('1.')).toBe(true)
-  })
-})
-
-describe('normalizeSignalVerdicts', () => {
-  it('maps buyer + on_niche per index, tolerant of junk', () => {
-    const out = normalizeSignalVerdicts(
-      { verdicts: [
-        { index: 1, is_buyer: true, on_niche: true, confidence: 'high' },
-        { index: 2, is_buyer: true, on_niche: false },
-        { index: 9, is_buyer: true, on_niche: true },
-      ] },
-      2,
-    )
-    expect(out[0]).toEqual({ buyer: 'buyer', onNiche: true, confidence: 'high' })
-    expect(out[1]).toEqual({ buyer: 'buyer', onNiche: false, confidence: 'medium' })
-  })
-  it('returns all-null for a non-array payload', () => {
-    expect(normalizeSignalVerdicts(null, 2)).toEqual([null, null])
+    expect(normalizeBuyerVerdicts(null, 2)).toEqual([null, null])
   })
 })

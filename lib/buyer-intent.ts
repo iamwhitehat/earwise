@@ -1,106 +1,51 @@
-// Buyer-intent gate (pure). The intent-pattern match is a cheap first pass that
-// still lets through non-buyers; this second pass has Haiku confirm a *genuine
-// buyer* — a real person with a problem actively seeking or willing to pay for a
-// solution — vs noise (answering, self-promo, jokes, venting). DB caching +
-// the Claude call live elsewhere; this stays testable (no server-only, no SDK).
+// Buyer-intent gate (pure). Classifies the AUTHOR's role so only a GENUINE BUYER
+// reaches Hot-now / Leads — makers/self-promoters and discussion/rants are
+// filtered out. The Claude call + DB cache live elsewhere (lib/claude.ts,
+// lib/buyer-intent-db.ts); this module stays testable (no server-only, no SDK).
 
-export type BuyerVerdict = 'buyer' | 'not_buyer'
+export type BuyerRole = 'buyer' | 'maker' | 'discussion'
 export type BuyerConfidence = 'high' | 'medium' | 'low'
-export type BuyerIntentResult = { verdict: BuyerVerdict; confidence: BuyerConfidence }
 
+export type BuyerIntentResult = {
+  /** buyer = wants a solution now · maker = promoting their own thing ·
+   *  discussion = answering/showcase/rant/news. */
+  role: BuyerRole
+  /** Only a `buyer` role is a genuine buyer. */
+  isBuyer: boolean
+  confidence: BuyerConfidence
+}
+
+export function isBuyerRole(role: BuyerRole | null | undefined): boolean {
+  return role === 'buyer'
+}
+
+// The verdict string stored in the posts.buyer_intent cache column.
+export type BuyerVerdict = 'buyer' | 'not_buyer'
+export function verdictForRole(role: BuyerRole): BuyerVerdict {
+  return role === 'buyer' ? 'buyer' : 'not_buyer'
+}
 export function isGenuineBuyer(verdict: BuyerVerdict | null | undefined): boolean {
   return verdict === 'buyer'
 }
 
-// ─── Combined relevance + buyer-intent ───────────────────────────────────────
-// The same Haiku pass also judges whether a signal is on-niche for the founder's
-// project. A signal must be BOTH on-niche AND a genuine buyer to reach Hot-now /
-// Leads. Relevance depends on the niche, so callers cache it with a nicheKey().
+// ── Maker / self-promo pre-flag ──────────────────────────────────────────────
+// Cheap deterministic catch for the unambiguous "I'm promoting my own thing"
+// tells, so obvious makers never need a Claude call (and are testable). Anything
+// not caught here still goes to the model.
+const MAKER_PATTERNS: RegExp[] = [
+  /\bi will not promote\b/i,
+  /\bi (?:built|made|created|developed|launched|shipped)\b/i,
+  /\bi'?m (?:building|launching|working on)\b/i,
+  /\bwe(?:'re| are)? (?:building|launching)\b/i,
+  /\bwe(?:'re| are)? looking for (?:users|feedback|beta|testers|early adopters)\b/i,
+  /\blooking for (?:beta )?(?:users|testers|feedback|early adopters) for my\b/i,
+  /\bcheck (?:out|this) my\b/i,
+  /\bmy (?:app|tool|startup|saas|product|project|side[- ]?project)\b/i,
+]
 
-export type SignalVerdict = {
-  buyer: BuyerVerdict
-  /** On-niche for the founder's project. */
-  onNiche: boolean
-  confidence: BuyerConfidence
+export function makerPreflag(text: string): boolean {
+  return MAKER_PATTERNS.some((re) => re.test(text))
 }
-
-const NICHE_CONTEXT_CAP = 600
-
-/** Compress the niche/profile sources into a single context string. Empty when
- *  there's nothing to judge against (→ callers skip relevance gating). Pure. */
-export function buildNicheContext(parts: Array<string | null | undefined>): string {
-  return parts
-    .map((p) => (typeof p === 'string' ? p.trim() : ''))
-    .filter(Boolean)
-    .join(' · ')
-    .replace(/\s+/g, ' ')
-    .slice(0, NICHE_CONTEXT_CAP)
-}
-
-/** Stable short key for a niche context, so a cached on-niche verdict is only
- *  reused while the niche is unchanged. '' for an empty context. Pure (FNV-1a). */
-export function nicheKey(context: string): string {
-  const norm = context.trim().toLowerCase().replace(/\s+/g, ' ')
-  if (!norm) return ''
-  let h = 0x811c9dc5
-  for (let i = 0; i < norm.length; i++) {
-    h ^= norm.charCodeAt(i)
-    h = Math.imul(h, 0x01000193)
-  }
-  return (h >>> 0).toString(36)
-}
-
-export const SIGNAL_GATE_SYSTEM_PROMPT = `You screen Reddit posts/comments for a founder, on TWO axes at once.
-
-1. on_niche — is this about the founder's NICHE (the space their product serves)? The founder's niche is given at the top of the user message. true only if the post is plausibly about that space / its problems / its tools. Off-topic chatter from the same subreddit is on_niche = false.
-
-2. is_buyer — is the AUTHOR a GENUINE BUYER: a real person who has the problem now and is actively looking for, comparing, or willing to pay for a solution? true only when they themselves want a solution (asking for a tool, switching and seeking an alternative, saying they'd pay). false for: answering/recommending to someone else, promoting their own product, ranting with no intent, jokes/hypotheticals, generic discussion.
-
-Judge each numbered item. When unsure on either axis, prefer false. Return one verdict per item via the report_signal_gate tool.`
-
-/** Numbered input prefixed with the founder's niche. Pure. */
-export function buildSignalGateInput(niche: string, items: { text: string }[]): string {
-  const head = niche ? `Founder's niche: ${niche}\n\n` : ''
-  return head + buildBuyerIntentInput(items)
-}
-
-/**
- * Map the combined tool output ({ verdicts: [{ index, is_buyer, on_niche,
- * confidence }] }) onto a fixed-length array aligned to input order. Tolerant.
- */
-export function normalizeSignalVerdicts(raw: unknown, count: number): (SignalVerdict | null)[] {
-  const out: (SignalVerdict | null)[] = new Array(count).fill(null)
-  const arr = (raw as { verdicts?: unknown })?.verdicts
-  if (!Array.isArray(arr)) return out
-  for (const v of arr) {
-    const o = (v ?? {}) as Record<string, unknown>
-    const idx = Number(o.index)
-    if (!Number.isInteger(idx) || idx < 1 || idx > count) continue
-    if (out[idx - 1]) continue
-    out[idx - 1] = {
-      buyer: o.is_buyer === true ? 'buyer' : 'not_buyer',
-      onNiche: o.on_niche === true,
-      confidence: asConfidence(o.confidence),
-    }
-  }
-  return out
-}
-
-export const BUYER_INTENT_SYSTEM_PROMPT = `You decide whether each numbered Reddit post/comment is a GENUINE BUYER for a software/tool/service — a real person who has the problem now and is actively looking for, comparing, or willing to pay for a solution.
-
-Mark is_buyer = true ONLY when the author themselves wants a solution:
-- asking for a tool/recommendation for their own need
-- switching away from a tool and seeking an alternative
-- saying they'd pay / are looking to buy
-
-Mark is_buyer = false for everything else, including:
-- answering or recommending a tool to someone else
-- promoting their own product/project ("I built…", "check out my…")
-- ranting/venting with no intent to find or buy a solution
-- jokes, hypotheticals, or off-topic "would pay" (e.g. "I'd pay to skip this")
-- generic discussion, news, tutorials, or "what do you all think"
-
-When unsure, prefer is_buyer = false. Return one verdict per numbered item via the report_buyer_intent tool.`
 
 const CLASSIFY_TEXT_CAP = 600
 
@@ -112,13 +57,26 @@ export function buildBuyerIntentInput(items: { text: string }[]): string {
     .join('\n\n')
 }
 
+export const BUYER_INTENT_SYSTEM_PROMPT = `You classify each numbered Reddit post/comment by the AUTHOR'S role for a tool/service vendor.
+
+role = "maker": the author is promoting, launching, showing off, or seeking users/feedback/beta/testers for THEIR OWN product, app, tool, startup, or project. Tells: "I built…", "I made…", "I'm launching…", "check out my…", "I will not promote… (but here's my thing)", "looking for beta testers". Makers are NOT buyers.
+
+role = "buyer": the author themselves has the problem RIGHT NOW and is actively looking for, comparing, or willing to pay for a solution. Set "intent" to "looking-for" (asking for a tool/recommendation), "switching" (leaving a tool, wants an alternative), or "willing-to-pay" ("I'd pay for…"). Only this role is a buyer.
+
+role = "discussion": everything else — answering or recommending to someone else, motivational/mindset rants, showcases, jokes, hypotheticals, news, tutorials, generic "what do you all think". A motivational rant that mentions paying is still "discussion", NOT a buyer.
+
+Be strict. When unsure, prefer "discussion". Return one verdict per numbered item via the report_buyer_intent tool.`
+
 function asConfidence(v: unknown): BuyerConfidence {
   return v === 'high' || v === 'medium' || v === 'low' ? v : 'medium'
 }
+function asRole(v: unknown): BuyerRole {
+  return v === 'buyer' || v === 'maker' || v === 'discussion' ? v : 'discussion'
+}
 
 /**
- * Map the tool output ({ verdicts: [{ index, is_buyer, confidence }] }) onto a
- * fixed-length array aligned to the input order. Tolerant: unknown shapes,
+ * Map the tool output ({ verdicts: [{ index, role, intent?, confidence }] }) onto
+ * a fixed-length array aligned to input order. Tolerant: unknown shapes,
  * out-of-range indexes, and duplicates are ignored; unscored slots stay null.
  */
 export function normalizeBuyerVerdicts(raw: unknown, count: number): (BuyerIntentResult | null)[] {
@@ -130,10 +88,8 @@ export function normalizeBuyerVerdicts(raw: unknown, count: number): (BuyerInten
     const idx = Number(o.index)
     if (!Number.isInteger(idx) || idx < 1 || idx > count) continue
     if (out[idx - 1]) continue // first verdict for an index wins
-    out[idx - 1] = {
-      verdict: o.is_buyer === true ? 'buyer' : 'not_buyer',
-      confidence: asConfidence(o.confidence),
-    }
+    const role = asRole(o.role)
+    out[idx - 1] = { role, isBuyer: role === 'buyer', confidence: asConfidence(o.confidence) }
   }
   return out
 }

@@ -22,10 +22,10 @@ import type {
 } from './insight-types'
 import type { StrategyBrief } from './strategy'
 import {
-  SIGNAL_GATE_SYSTEM_PROMPT,
-  buildSignalGateInput,
-  normalizeSignalVerdicts,
-  type SignalVerdict,
+  BUYER_INTENT_SYSTEM_PROMPT,
+  buildBuyerIntentInput,
+  normalizeBuyerVerdicts,
+  type BuyerIntentResult,
 } from './buyer-intent'
 
 export type { Category }
@@ -1418,13 +1418,14 @@ export async function draftObjectionResponse(opts: {
   return cleanDraft(out?.message)
 }
 
-// ─── Signal gate (Haiku) — relevance + buyer-intent in one pass ──────────────
-// Second-pass filter over intent-matched signals: confirm on-niche AND genuine
-// buyer. Batched (N items/call) via the tool runner — no regex JSON.
+// ─── Buyer-intent gate (Haiku) — author role ─────────────────────────────────
+// Second-pass over intent-matched signals: classify the author's role (buyer /
+// maker / discussion) so makers + rants are filtered out. Batched via the tool
+// runner — no regex JSON. Relevance is a separate filter (lib/relevance.ts).
 
-const SIGNAL_GATE_TOOL: StructuredTool = {
-  name: 'report_signal_gate',
-  description: 'For each numbered post/comment, report whether it is on the founder’s niche and a genuine buyer.',
+const BUYER_INTENT_TOOL: StructuredTool = {
+  name: 'report_buyer_intent',
+  description: "For each numbered post/comment, report the author's role (buyer / maker / discussion).",
   input_schema: {
     type: 'object',
     properties: {
@@ -1434,11 +1435,11 @@ const SIGNAL_GATE_TOOL: StructuredTool = {
           type: 'object',
           properties: {
             index: { type: 'integer', description: '1-based item number' },
-            on_niche: { type: 'boolean' },
-            is_buyer: { type: 'boolean' },
+            role: { type: 'string', enum: ['buyer', 'maker', 'discussion'] },
+            intent: { type: 'string', enum: ['looking-for', 'switching', 'willing-to-pay'] },
             confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
           },
-          required: ['index', 'on_niche', 'is_buyer'],
+          required: ['index', 'role'],
         },
       },
     },
@@ -1446,21 +1447,20 @@ const SIGNAL_GATE_TOOL: StructuredTool = {
   },
 }
 
-/** Classify a batch of signals on two axes — on-niche + genuine buyer — given
- *  the founder's niche. Returns a result per input item (null when unscored). */
-export async function classifySignalGate(
+/** Classify a batch of signals by author role. Returns a result per input item
+ *  (null when the model didn't return a verdict). */
+export async function classifyBuyerIntent(
   items: { text: string }[],
-  niche: string,
-): Promise<(SignalVerdict | null)[]> {
+): Promise<(BuyerIntentResult | null)[]> {
   if (items.length === 0) return []
   const input = await callStructured(
     MODEL_BULK,
-    SIGNAL_GATE_SYSTEM_PROMPT,
-    buildSignalGateInput(niche, items),
-    SIGNAL_GATE_TOOL,
+    BUYER_INTENT_SYSTEM_PROMPT,
+    buildBuyerIntentInput(items),
+    BUYER_INTENT_TOOL,
     1500,
   )
-  return normalizeSignalVerdicts(input, items.length)
+  return normalizeBuyerVerdicts(input, items.length)
 }
 
 const COMMENT_INSIGHTS_TOOL: StructuredTool = {
