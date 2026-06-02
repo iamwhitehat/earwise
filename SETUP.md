@@ -617,6 +617,8 @@ reason so off-niche/non-buyer rows disappear from the default views. Run once:
 
 ```sql
 alter table posts add column if not exists embedding jsonb;        -- if not already present
+alter table posts          add column if not exists buyer_intent_type text;
+alter table post_comments  add column if not exists buyer_intent_type text;
 alter table leads add column if not exists disqualified boolean not null default false;
 alter table leads add column if not exists disq_reason text;
 create index if not exists leads_disqualified_idx on leads (disqualified);
@@ -626,13 +628,20 @@ Null-tolerant + additive:
 - `posts.embedding` caches each post's embedding vector (computed lazily when
   `EMBEDDINGS_API_KEY` is set); with no key, relevance falls back to a cheap
   Haiku yes/no, and a missing column just means no caching.
+- `posts.buyer_intent_type` / `post_comments.buyer_intent_type` cache the
+  classifier's intent (looking-for/switching/willing-to-pay) so the badge shows
+  the model's judgement rather than the raw matched substring; a missing column
+  just falls back to the substring.
 - `leads.disqualified` / `disq_reason` default to keeping every existing row; the
   one-off purge ([POST /api/leads/purge](app/api/leads/purge/route.ts)) flags
   off-niche/non-buyer leads so they drop out of the board without being deleted.
 - The earlier `on_niche` columns (§2b-unvicies) are now unused but harmless —
   relevance is computed at query time, not cached on the post.
 
-`HOT_NOW_WINDOW_HOURS` (optional env, default `6`) tightens the Hot-now window.
+Optional env:
+- `HOT_NOW_WINDOW_HOURS` (default `6`) tightens the Hot-now window.
+- `RELEVANCE_TAU` (default `0.6`) is the qualifying relevance threshold τ — a
+  candidate reaches Hot-now / leads only if its relevance score is `>= τ`.
 
 ### 2c. Get the credentials
 

@@ -6,6 +6,7 @@ import 'server-only'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { loadSignals } from './signals-db'
 import { gateSignals } from './buyer-intent-db'
+import { loadRelevance, relevanceTau, keyOf } from './relevance-db'
 import { scoreSignal, rankHotSignals, type HotSignal } from './hot-signals'
 import { computeFitToYou } from './advantage'
 import { fitText, DEFAULT_PROJECT } from './memory'
@@ -20,11 +21,16 @@ export async function loadHotSignals(
     loadSignals(db, { ageMs: opts.windowMs }),
     loadMemoryFacts(db, projectId),
   ])
-  // Relevance + buyer-intent gate before scoring so Hot-now only ever shows
-  // on-niche genuine buyers.
-  const gated = await gateSignals(db, signals, { projectId })
+  // Combined gate before scoring so Hot-now only ever shows on-niche genuine
+  // buyers: (1) buyer-intent (drops makers/discussion), then (2) relevance to
+  // the active project (drops off-niche), qualifying only relevance >= τ.
+  const buyers = await gateSignals(db, signals, { projectId })
+  const relevance = await loadRelevance(db, buyers, projectId)
+  const tau = relevanceTau()
+  const qualified = buyers.filter((s) => (relevance.get(keyOf(s))?.score ?? 1) >= tau)
+
   const memText = fitText(memFacts)
-  const scored = gated.map((s) =>
+  const scored = qualified.map((s) =>
     scoreSignal(s, computeFitToYou(memText, `${s.topic ?? ''} ${s.text}`)),
   )
   return rankHotSignals(scored, { limit: opts.limit, minScore: opts.minScore })

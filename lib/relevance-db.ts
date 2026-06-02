@@ -21,6 +21,7 @@ import { getProject } from './projects-db'
 import { loadMemoryFacts } from './memory-db'
 import { offerText, fitText, DEFAULT_PROJECT } from './memory'
 import { canonicalTopic } from './topics'
+import { DEFAULT_RELEVANCE_TAU } from './relevance'
 import type { SignalRow } from './signals-db'
 
 const RELEVANCE_CAP = 80
@@ -28,6 +29,13 @@ const EMBED_TEXT_CAP = 600
 const FULLY_RELEVANT: Relevance = { score: 1, reason: 'not screened' }
 
 export const keyOf = (s: Pick<SignalRow, 'kind' | 'id'>): string => `${s.kind}:${s.id}`
+
+/** Qualifying relevance threshold τ (env-tunable RELEVANCE_TAU, default 0.6).
+ *  A candidate reaches HOT NOW / leads only if its relevance score is >= τ. */
+export function relevanceTau(): number {
+  const raw = Number(process.env.RELEVANCE_TAU)
+  return Number.isFinite(raw) && raw > 0 && raw <= 1 ? raw : DEFAULT_RELEVANCE_TAU
+}
 
 /** Top opportunity topics (canonical) for a project — enriches the niche vector
  *  with what the project is actually pursuing. [] when the table is absent. */

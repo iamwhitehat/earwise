@@ -2,6 +2,7 @@
 // reaches Hot-now / Leads — makers/self-promoters and discussion/rants are
 // filtered out. The Claude call + DB cache live elsewhere (lib/claude.ts,
 // lib/buyer-intent-db.ts); this module stays testable (no server-only, no SDK).
+import { INTENT_TYPES, type IntentType } from './intent-patterns'
 
 export type BuyerRole = 'buyer' | 'maker' | 'discussion'
 export type BuyerConfidence = 'high' | 'medium' | 'low'
@@ -13,6 +14,10 @@ export type BuyerIntentResult = {
   /** Only a `buyer` role is a genuine buyer. */
   isBuyer: boolean
   confidence: BuyerConfidence
+  /** The buyer's intent (looking-for/switching/willing-to-pay) as judged by the
+   *  classifier — preferred over the raw matched substring for the badge.
+   *  null for non-buyers or when the model didn't specify. */
+  intent: IntentType | null
 }
 
 export function isBuyerRole(role: BuyerRole | null | undefined): boolean {
@@ -73,6 +78,9 @@ function asConfidence(v: unknown): BuyerConfidence {
 function asRole(v: unknown): BuyerRole {
   return v === 'buyer' || v === 'maker' || v === 'discussion' ? v : 'discussion'
 }
+function asIntent(v: unknown): IntentType | null {
+  return typeof v === 'string' && (INTENT_TYPES as readonly string[]).includes(v) ? (v as IntentType) : null
+}
 
 /**
  * Map the tool output ({ verdicts: [{ index, role, intent?, confidence }] }) onto
@@ -89,7 +97,12 @@ export function normalizeBuyerVerdicts(raw: unknown, count: number): (BuyerInten
     if (!Number.isInteger(idx) || idx < 1 || idx > count) continue
     if (out[idx - 1]) continue // first verdict for an index wins
     const role = asRole(o.role)
-    out[idx - 1] = { role, isBuyer: role === 'buyer', confidence: asConfidence(o.confidence) }
+    out[idx - 1] = {
+      role,
+      isBuyer: role === 'buyer',
+      confidence: asConfidence(o.confidence),
+      intent: role === 'buyer' ? asIntent(o.intent) : null,
+    }
   }
   return out
 }

@@ -57,9 +57,9 @@ describe('normalizeBuyerVerdicts (role-based)', () => {
       ] },
       3,
     )
-    expect(out[0]).toEqual({ role: 'buyer', isBuyer: true, confidence: 'high' })
-    expect(out[1]).toEqual({ role: 'maker', isBuyer: false, confidence: 'medium' })
-    expect(out[2]).toEqual({ role: 'discussion', isBuyer: false, confidence: 'medium' })
+    expect(out[0]).toEqual({ role: 'buyer', isBuyer: true, confidence: 'high', intent: 'willing-to-pay' })
+    expect(out[1]).toEqual({ role: 'maker', isBuyer: false, confidence: 'medium', intent: null })
+    expect(out[2]).toEqual({ role: 'discussion', isBuyer: false, confidence: 'medium', intent: null })
   })
   it('defaults unknown/junk role to discussion (not a buyer)', () => {
     const out = normalizeBuyerVerdicts({ verdicts: [{ index: 1, role: 'whatever' }] }, 1)
@@ -73,6 +73,7 @@ describe('normalizeBuyerVerdicts (role-based)', () => {
       { index: 1, role: 'maker' },
     ] }, 2)
     expect(out[0]?.role).toBe('buyer')
+    expect(out[0]?.intent).toBeNull() // buyer with no intent specified → null
     expect(out[1]).toBeNull()
   })
   it('returns all-null for a non-array payload', () => {

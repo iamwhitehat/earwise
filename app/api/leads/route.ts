@@ -10,6 +10,10 @@ import {
 import { logLeadEvent, LEADS_MIGRATION_HINT, LEAD_COLUMNS } from '@/lib/leads-db'
 import { scoreLeads, sortHotFirst } from '@/lib/leads-score-db'
 import { activeProjectId } from '@/lib/project-server'
+import { qualifySignal } from '@/lib/gate-db'
+import type { SignalRow } from '@/lib/signals-db'
+import type { IntentType } from '@/lib/intent-patterns'
+import type { Category } from '@/lib/categories'
 
 // GET /api/leads?status=  — list leads (newest activity first) + per-status
 // counts. Status filter is optional; an unknown status is a 400.
@@ -95,11 +99,39 @@ export async function POST(req: NextRequest) {
     )
   }
 
+  const projectId = await activeProjectId()
+
+  // Combined relevance + buyer-intent gate: off-niche posts and makers/
+  // self-promoters never reach the leads table. Degrades open — when
+  // classification/embeddings are unavailable the candidate passes, so only a
+  // confident disqualification blocks a save.
+  const id = norm.lead.external_id.slice(norm.lead.kind.length + 1)
+  const sigForGate: SignalRow = {
+    kind: norm.lead.kind,
+    id,
+    post_id: norm.lead.post_id,
+    subreddit: norm.lead.subreddit,
+    author: norm.lead.author,
+    text: norm.lead.excerpt,
+    matchedPhrase: '',
+    intentType: (norm.lead.intent_type as IntentType) ?? 'looking-for',
+    category: (norm.lead.category as Category) ?? 'other',
+    topic: norm.lead.topic,
+    analyzedAt: Date.now(),
+    permalink: norm.lead.permalink,
+  }
+  const gate = await qualifySignal(db, sigForGate, projectId)
+  if (!gate.ok) {
+    return Response.json(
+      { error: `This lead was filtered out as ${gate.reason}.`, disqualified: true, reason: gate.reason },
+      { status: 422 },
+    )
+  }
+
   // Insert, ignoring a conflict on the unique (source, external_id) key. A
   // returned row means it was newly created; an empty result means it already
   // existed, which we then fetch so the client always gets the lead back. The
   // lead is tagged with the active project (workspace).
-  const projectId = await activeProjectId()
   const { data: inserted, error: insertErr } = await db
     .from('leads')
     .upsert({ ...norm.lead, project_id: projectId }, { onConflict: 'source,external_id', ignoreDuplicates: true })

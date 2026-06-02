@@ -1,14 +1,18 @@
 // Server buyer-intent gate: keep only GENUINE BUYERS, dropping makers /
 // self-promoters and discussion/rants. A cheap maker pre-flag (regex) catches
 // the obvious self-promo without a Claude call; the rest go to the role
-// classifier (Haiku, cached on posts.buyer_intent). Relevance is a separate
-// filter applied on top (lib/relevance-db + the combined gate in hot-signals).
-// Tolerant of the unmigrated column (degrades to pass-through) and bounded.
+// classifier (Haiku, cached on posts.buyer_intent). The classifier's intent
+// (looking-for/switching/willing-to-pay) is cached on buyer_intent_type and
+// used to override the raw matched-substring intentType on kept buyers, so the
+// badge reflects the model's judgement. Relevance is a separate filter applied
+// on top (lib/relevance-db + the combined gate in hot-signals). Tolerant of the
+// unmigrated columns (degrades to pass-through) and bounded.
 import 'server-only'
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { classifyBuyerIntent } from './claude'
 import { isGenuineBuyer, makerPreflag, verdictForRole, type BuyerVerdict } from './buyer-intent'
+import { INTENT_TYPES, type IntentType } from './intent-patterns'
 import type { SignalRow } from './signals-db'
 
 const CLASSIFY_CAP = 60
@@ -18,11 +22,15 @@ const keyOf = (s: Pick<SignalRow, 'kind' | 'id'>): string => `${s.kind}:${s.id}`
 function isBuyerVerdict(v: unknown): v is BuyerVerdict {
   return v === 'buyer' || v === 'not_buyer'
 }
+function asIntent(v: unknown): IntentType | null {
+  return typeof v === 'string' && (INTENT_TYPES as readonly string[]).includes(v) ? (v as IntentType) : null
+}
 
 /**
  * Keep only genuine buyers. Confirmed makers / non-buyers are dropped; anything
  * not yet judged passes through so a real lead is never hidden before screening.
- * Relevance is layered on separately (see lib/hot-signals-db).
+ * Kept buyers get their `intentType` overridden with the classifier's intent
+ * when known. Relevance is layered on separately (see lib/hot-signals-db).
  */
 export async function gateSignals(
   db: SupabaseClient,
@@ -32,14 +40,38 @@ export async function gateSignals(
   if (signals.length === 0) return signals
 
   const buyer = new Map<string, BuyerVerdict>()
+  const intent = new Map<string, IntentType>()
+  // Whether the buyer_intent_type column exists (learned from the cache read);
+  // gates whether we attempt to persist it. Assume present until proven absent.
+  let intentColExists = true
 
   // 1. Cached verdicts. A column-missing error (pre-migration) → pass-through.
-  async function readCache(table: 'posts' | 'post_comments', idCol: string, ids: string[], prefix: string): Promise<boolean> {
+  async function readCache(
+    table: 'posts' | 'post_comments',
+    idCol: string,
+    ids: string[],
+    prefix: string,
+  ): Promise<boolean> {
     if (ids.length === 0) return true
-    const { data, error } = await db.from(table).select(`${idCol}, buyer_intent`).in(idCol, ids)
-    if (error) return false
-    for (const r of (data ?? []) as unknown as Record<string, unknown>[]) {
-      if (isBuyerVerdict(r.buyer_intent)) buyer.set(`${prefix}:${r[idCol] as string}`, r.buyer_intent)
+    // Try verdict + classifier intent; fall back if the intent column isn't
+    // migrated yet; pass-through if neither column exists. (Separate consts —
+    // reassigning a typed .select() across different column strings trips the
+    // PostgREST ParserError type.)
+    const rich = await db.from(table).select(`${idCol}, buyer_intent, buyer_intent_type`).in(idCol, ids)
+    let rows: Record<string, unknown>[]
+    if (rich.error) {
+      intentColExists = false
+      const lean = await db.from(table).select(`${idCol}, buyer_intent`).in(idCol, ids)
+      if (lean.error) return false
+      rows = (lean.data ?? []) as unknown as Record<string, unknown>[]
+    } else {
+      rows = (rich.data ?? []) as unknown as Record<string, unknown>[]
+    }
+    for (const r of rows) {
+      const id = r[idCol] as string
+      if (isBuyerVerdict(r.buyer_intent)) buyer.set(`${prefix}:${id}`, r.buyer_intent)
+      const it = asIntent(r.buyer_intent_type)
+      if (it) intent.set(`${prefix}:${id}`, it)
     }
     return true
   }
@@ -54,8 +86,9 @@ export async function gateSignals(
   if (uncached.length > 0) {
     const nowIso = new Date().toISOString()
     const writes: Promise<unknown>[] = []
-    const persist = (s: SignalRow, verdict: BuyerVerdict) => {
-      const patch = { buyer_intent: verdict, buyer_intent_at: nowIso }
+    const persist = (s: SignalRow, verdict: BuyerVerdict, intentType: IntentType | null) => {
+      const patch: Record<string, unknown> = { buyer_intent: verdict, buyer_intent_at: nowIso }
+      if (intentColExists && intentType) patch.buyer_intent_type = intentType
       writes.push(
         s.kind === 'post'
           ? Promise.resolve(db.from('posts').update(patch).eq('post_id', s.id).eq('subreddit', s.subreddit))
@@ -67,7 +100,7 @@ export async function gateSignals(
     for (const s of uncached) {
       if (makerPreflag(s.text)) {
         buyer.set(keyOf(s), 'not_buyer')
-        persist(s, 'not_buyer')
+        persist(s, 'not_buyer', null)
       } else {
         toClassify.push(s)
       }
@@ -79,7 +112,8 @@ export async function gateSignals(
         if (!r) return
         const verdict = verdictForRole(r.role)
         buyer.set(keyOf(s), verdict)
-        persist(s, verdict)
+        if (r.intent) intent.set(keyOf(s), r.intent)
+        persist(s, verdict, r.intent)
       })
     }
 
@@ -92,9 +126,14 @@ export async function gateSignals(
     }
   }
 
-  // 3. Drop confirmed non-buyers; keep buyers + still-unjudged.
-  return signals.filter((s) => {
+  // 3. Drop confirmed non-buyers; keep buyers + still-unjudged. Override the
+  //    badge intent with the classifier's verdict where we have it.
+  const kept: SignalRow[] = []
+  for (const s of signals) {
     const v = buyer.get(keyOf(s))
-    return v == null ? true : isGenuineBuyer(v)
-  })
+    if (v != null && !isGenuineBuyer(v)) continue
+    const it = intent.get(keyOf(s))
+    kept.push(it ? { ...s, intentType: it } : s)
+  }
+  return kept
 }
