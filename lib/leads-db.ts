@@ -41,6 +41,25 @@ export async function persistLeadScore(
   if (error) console.warn('[leads] score persist skipped:', error.message)
 }
 
+/** Best-effort flag a lead as disqualified (off-niche / non-buyer) with a
+ *  reason, so it drops out of default views without being deleted. No-ops when
+ *  the disqualified column isn't migrated yet. */
+export async function disqualifyLead(
+  db: SupabaseClient,
+  leadId: number,
+  reason: string,
+): Promise<boolean> {
+  const { error } = await db
+    .from('leads')
+    .update({ disqualified: true, disq_reason: reason.slice(0, 300) })
+    .eq('id', leadId)
+  if (error) {
+    console.warn('[leads] disqualify skipped:', error.message)
+    return false
+  }
+  return true
+}
+
 /**
  * Append a row to lead_events. Best-effort: a logging failure is recorded but
  * never fails the caller's request — the event log is the moat-data seed, not

@@ -158,6 +158,10 @@ export type Lead = {
   scoreBreakdown: ScoreBreakdown | null
   nextFollowUpAt: number | null
   sequenceStep: number
+  // Combined-gate purge (RELEVANCE-INTENT-GATE-PATCH §6): off-niche / non-buyer
+  // leads are flagged (not deleted) and hidden from the default board.
+  disqualified: boolean
+  disqReason: string | null
 }
 
 /** Map a raw Supabase row to the client Lead shape. Tolerant of missing
@@ -194,6 +198,8 @@ export function mapLeadRow(rowRaw: unknown): Lead {
       ? new Date(row.next_follow_up_at as string).getTime()
       : null,
     sequenceStep: typeof row.sequence_step === 'number' ? row.sequence_step : 0,
+    disqualified: row.disqualified === true,
+    disqReason: (row.disq_reason as string | null) ?? null,
   }
 }
 

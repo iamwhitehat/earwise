@@ -125,6 +125,8 @@ describe('mapLeadRow', () => {
     expect(lead.status).toBe('replied')
     expect(lead.author).toBe('unknown') // missing column -> fallback
     expect(lead.createdAt).toBeLessThan(lead.lastEventAt)
+    expect(lead.disqualified).toBe(false) // missing column -> not disqualified
+    expect(lead.disqReason).toBeNull()
   })
 
   it('coerces an unknown status to "new"', () => {

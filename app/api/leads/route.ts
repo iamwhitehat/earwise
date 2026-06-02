@@ -34,20 +34,31 @@ export async function GET(req: NextRequest) {
   }
 
   const projectId = await activeProjectId()
-  let listQuery = db
-    .from('leads')
-    .select(LEAD_COLUMNS)
-    .eq('project_id', projectId)
-    .order('last_event_at', { ascending: false })
-    .limit(500)
-  if (statusParam) listQuery = listQuery.eq('status', statusParam)
 
-  // Counts come from a separate lightweight read of every lead's status so the
-  // board can show per-column totals regardless of the active filter.
-  const [listRes, countRes] = await Promise.all([
-    listQuery,
-    db.from('leads').select('status').eq('project_id', projectId),
-  ])
+  // Default board hides disqualified (off-niche / non-buyer) leads. The filter
+  // is applied at the DB but degrades gracefully: if the column isn't migrated
+  // yet the query errors, and we retry without it (nothing hidden).
+  const listLeads = (excludeDisq: boolean) => {
+    let q = db
+      .from('leads')
+      .select(LEAD_COLUMNS)
+      .eq('project_id', projectId)
+      .order('last_event_at', { ascending: false })
+      .limit(500)
+    if (statusParam) q = q.eq('status', statusParam)
+    if (excludeDisq) q = q.eq('disqualified', false)
+    return q
+  }
+  const countLeads = (excludeDisq: boolean) => {
+    let q = db.from('leads').select('status').eq('project_id', projectId)
+    if (excludeDisq) q = q.eq('disqualified', false)
+    return q
+  }
+
+  let [listRes, countRes] = await Promise.all([listLeads(true), countLeads(true)])
+  // Retry without the disqualified filter if the column is absent.
+  if (listRes.error) listRes = await listLeads(false)
+  if (countRes.error) countRes = await countLeads(false)
 
   if (listRes.error || countRes.error) {
     const err = listRes.error ?? countRes.error

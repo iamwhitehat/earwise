@@ -22,8 +22,8 @@ import type { Category } from './categories'
 const BACKFILL_CAP = 50
 
 /** Adapt a stored Lead back into a SignalRow so it can be re-scored for
- *  relevance against the active project. */
-function leadToSignal(lead: Lead): SignalRow {
+ *  relevance against the active project, or re-run through the combined gate. */
+export function leadToSignal(lead: Lead): SignalRow {
   const prefix = `${lead.kind}:`
   const id = lead.externalId.startsWith(prefix) ? lead.externalId.slice(prefix.length) : lead.postId
   return {
