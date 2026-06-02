@@ -1433,6 +1433,36 @@ a.accent-link:focus-visible {
 .seg-btn.on { background: var(--accent); color: var(--on-signal, #0E0F13); font-weight: 600; }
 .pipe-actions { display: flex; justify-content: flex-end; margin-bottom: var(--gap); }
 
+/* Pipeline › Reach */
+.reach { display: flex; flex-direction: column; }
+.reach-density { display: flex; flex-direction: column; gap: 7px; }
+.reach-dens-row { display: grid; grid-template-columns: 120px 1fr 32px; align-items: center; gap: 10px; }
+.reach-dens-sub { font-size: 12px; color: var(--ink-2); }
+.reach-dens-bar { height: 8px; border-radius: 99px; background: var(--surface-2); overflow: hidden; }
+.reach-dens-bar i { display: block; height: 100%; border-radius: 99px; background: var(--accent); }
+.reach-dens-n { font-size: 11.5px; color: var(--ink-3); text-align: right; font-variant-numeric: tabular-nums; }
+.reach-moves { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
+.reach-move { display: flex; align-items: center; gap: 10px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 9px 12px; font-size: 13.5px; color: var(--ink); }
+.reach-move.done .reach-move-text { color: var(--ink-4); text-decoration: line-through; }
+.reach-check { width: 20px; height: 20px; flex-shrink: 0; border-radius: 6px; border: 1px solid var(--border-2); background: var(--surface-2); color: var(--on-signal, #0E0F13); cursor: pointer; font-size: 12px; line-height: 1; display: grid; place-items: center; }
+.reach-move.done .reach-check { background: var(--accent); border-color: var(--accent); }
+.reach-move-text { flex: 1; min-width: 0; }
+.reach-tag { font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; padding: 2px 7px; border-radius: 99px; font-family: var(--font-geist-mono), monospace; }
+.reach-tag.reach-direct { background: var(--accent-soft); color: var(--accent-text); }
+.reach-tag.reach-broad { background: var(--surface-2); color: var(--ink-3); border: 1px solid var(--border); }
+.reach-go { color: var(--accent-text); text-decoration: none; font-size: 15px; }
+.reach-angles { display: flex; flex-direction: column; gap: 8px; }
+.reach-angle { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 11px 13px; }
+.reach-angle-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.reach-angle-topic { font-size: 13.5px; font-weight: 500; color: var(--ink); }
+.reach-angle-draft { font-size: 12px; color: var(--accent-text); text-decoration: none; }
+.reach-angle-sub { font-size: 11px; color: var(--ink-4); margin-top: 3px; font-variant-numeric: tabular-nums; }
+.reach-phrases { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; }
+.reach-phrases-label { font-size: 11px; color: var(--ink-4); }
+.reach-phrase { font-size: 11.5px; color: var(--ink-2); background: var(--surface-2); border: 1px solid var(--border); border-radius: 99px; padding: 2px 9px; }
+.reach-guard { display: flex; align-items: center; gap: 9px; padding: 12px 14px; font-size: 12.5px; color: var(--ink-2); }
+.reach-guard svg { color: var(--accent-text); flex-shrink: 0; }
+
 /* Status dot (lead board columns / pills) — neutral chip + colored dot */
 .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 99px; margin-right: 7px; vertical-align: middle; background: var(--ink-4); }
 .status-dot.status-new { background: #8A93A0; }

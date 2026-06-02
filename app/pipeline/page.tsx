@@ -7,7 +7,7 @@ import { Topbar } from '../_components/components'
 import { useScanCtx } from '../_components/scan-provider'
 import { LeadsBoard } from '../_components/leads-board'
 import { PlanView } from '../_components/plan-view'
-import { Icons } from '../_components/icons'
+import { ReachView } from '../_components/reach-view'
 
 // Pipeline (REDESIGN-SPEC › Zaslon 3): the act space, segmented into
 // Leads | Plan | Reach. The active view is URL-persisted (?view=) so it's
@@ -46,19 +46,9 @@ function PipelineInner() {
       <div className="content scroll">
         {view === 'leads' && <LeadsBoard />}
         {view === 'plan' && <PlanView />}
-        {view === 'reach' && <PipelineStub icon="compass" text="Operational distribution lives here." />}
+        {view === 'reach' && <ReachView />}
       </div>
     </>
-  )
-}
-
-function PipelineStub({ icon, text }: { icon: 'flag' | 'compass'; text: string }) {
-  const Icon = Icons[icon]
-  return (
-    <div className="card empty fade-in">
-      <span className="e-ico"><Icon size={26} /></span>
-      <div>{text}</div>
-    </div>
   )
 }
 
