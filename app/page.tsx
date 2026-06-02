@@ -10,6 +10,7 @@ import {
   CommentCoverage,
   AdvantageOpportunityCard,
   AskBar,
+  HotNowLane,
   ErrorsBanner,
   ExportButtons,
   FirstRunGuide,
@@ -391,6 +392,8 @@ function DashboardView() {
             )}
           </div>
         )}
+
+        {!showFirstRunGuide && <HotNowLane />}
 
         {!showFirstRunGuide && <AskBar />}
 

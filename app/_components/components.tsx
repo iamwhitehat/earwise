@@ -19,6 +19,8 @@ import type { StarterPreset } from '@/lib/use-watchlist'
 import type { MessagingAssets, MessagingAsset } from '@/lib/insight-types'
 import type { MaterializedOpportunity, AdvantageComponents } from '@/lib/advantage'
 import { scoreReason, SCORE_WEIGHTS, type Tier, type ScoreBreakdown, type FactorKey } from '@/lib/lead-score'
+import { INTENT_TYPE_LABEL, type IntentType } from '@/lib/intent-patterns'
+import type { HotSignal } from '@/lib/hot-signals'
 import { SYNTH_TIERS, SYNTH_TIER_LABEL, type SynthTier } from '@/lib/use-synth-model'
 import { canonicalTopic } from '@/lib/topics'
 import { toCsv, toMarkdown, downloadFile } from '@/lib/csv'
@@ -886,6 +888,146 @@ export function LeadScoreBadge({
         </>
       )}
     </span>
+  )
+}
+
+// ─── Hot-now lane (Convert #1, speed-to-lead) ────────────────────────────────
+
+function recency(ts: number): { label: string; fresh: boolean } {
+  const diff = Date.now() - ts
+  const fresh = diff < 3_600_000 // < 1h → lime
+  if (diff < 60_000) return { label: 'just now', fresh }
+  if (diff < 3_600_000) return { label: `${Math.floor(diff / 60_000)}m ago`, fresh }
+  if (diff < 86_400_000) return { label: `${Math.floor(diff / 3_600_000)}h ago`, fresh }
+  return { label: `${Math.floor(diff / 86_400_000)}d ago`, fresh }
+}
+
+type ReplyState = { status: 'idle' | 'working' | 'done' | 'error'; opener?: string; leadId?: number; error?: string }
+
+/**
+ * "Hot now 🔥" — the freshest high-intent signals, scored by Lead Score.
+ * `Reply now` adds the signal to the pipeline and pre-drafts an opener inline.
+ * Renders nothing until there's at least one hot/warm signal in the window.
+ */
+export function HotNowLane({ window = '24h', limit = 6 }: { window?: string; limit?: number }) {
+  const [signals, setSignals] = useState<HotSignal[] | null>(null)
+  const [replies, setReplies] = useState<Record<string, ReplyState>>({})
+
+  useEffect(() => {
+    let cancelled = false
+    fetch(`/api/hot-signals?window=${encodeURIComponent(window)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json: { signals?: HotSignal[] } | null) => {
+        if (!cancelled && json) setSignals(json.signals ?? [])
+      })
+      .catch(() => {
+        if (!cancelled) setSignals([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [window])
+
+  async function replyNow(s: HotSignal) {
+    setReplies((p) => ({ ...p, [s.id]: { status: 'working' } }))
+    try {
+      // 1. Add to pipeline (idempotent on source+external_id).
+      const leadRes = await fetch('/api/leads', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          kind: s.kind,
+          id: s.id,
+          post_id: s.post_id,
+          subreddit: s.subreddit,
+          permalink: s.permalink,
+          author: s.author,
+          topic: s.topic,
+          intentType: s.intentType,
+          category: s.category,
+          text: s.text,
+        }),
+      })
+      const leadJson = await leadRes.json()
+      if (!leadRes.ok) throw new Error(leadJson.error ?? `Error ${leadRes.status}`)
+      const leadId = (leadJson as { lead: { id: number; openerDraft: string | null } }).lead.id
+      const existingOpener = (leadJson as { lead: { openerDraft: string | null } }).lead.openerDraft
+
+      // 2. Pre-draft an opener (reuse an existing draft if the lead already had one).
+      let opener = existingOpener ?? ''
+      if (!opener) {
+        const opRes = await fetch(`/api/leads/${leadId}/opener`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ action: 'generate' }),
+        })
+        const opJson = await opRes.json()
+        if (!opRes.ok) throw new Error(opJson.error ?? `Error ${opRes.status}`)
+        opener = (opJson as { opener: string }).opener
+      }
+      setReplies((p) => ({ ...p, [s.id]: { status: 'done', opener, leadId } }))
+    } catch (err) {
+      setReplies((p) => ({
+        ...p,
+        [s.id]: { status: 'error', error: err instanceof Error ? err.message : 'Failed' },
+      }))
+    }
+  }
+
+  if (!signals || signals.length === 0) return null
+  const shown = signals.slice(0, limit)
+
+  return (
+    <section className="section">
+      <div className="section-head">
+        <h2>Hot now <span aria-hidden="true">🔥</span></h2>
+        <span className="pill">speed-to-lead</span>
+        <span className="hint">freshest high-intent — reply while it&apos;s warm</span>
+      </div>
+      <div className="hotnow">
+        {shown.map((s) => {
+          const r = replies[s.id] ?? { status: 'idle' as const }
+          const age = recency(s.analyzedAt)
+          return (
+            <div className="hotnow-row" key={`${s.kind}:${s.id}`}>
+              <div className="hotnow-main">
+                <span className="hotnow-author">u/{s.author}</span>
+                <SubChip sub={s.subreddit} />
+                <span className="hotnow-intent">{INTENT_TYPE_LABEL[s.intentType as IntentType] ?? s.intentType}</span>
+                <LeadScoreBadge score={s.score} tier={s.tier} breakdown={null} />
+                <span className={`hotnow-age tnum${age.fresh ? ' fresh' : ''}`}>{age.label}</span>
+                <a className="hotnow-view" href={s.permalink} target="_blank" rel="noopener noreferrer" title="Open thread">↗</a>
+                {r.status === 'done' ? (
+                  <span className="hotnow-added">✓ in pipeline</span>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm hotnow-reply"
+                    onClick={() => replyNow(s)}
+                    disabled={r.status === 'working'}
+                  >
+                    {r.status === 'working' ? <><Spinner size={11} /> Drafting…</> : 'Reply now'}
+                  </button>
+                )}
+              </div>
+              <p className="hotnow-excerpt">{s.text.slice(0, 160)}{s.text.length > 160 ? '…' : ''}</p>
+              {r.status === 'error' && <p className="hotnow-err">{r.error}</p>}
+              {r.status === 'done' && r.opener && (
+                <div className="hotnow-opener">
+                  <div className="hotnow-opener-label">Drafted opener · adapt before sending</div>
+                  <div className="hotnow-opener-body">{r.opener}</div>
+                  <div className="hotnow-opener-actions">
+                    <CopyButton text={r.opener} />
+                    <a className="btn btn-ghost btn-sm" href={s.permalink} target="_blank" rel="noopener noreferrer">Open thread ↗</a>
+                    <a className="btn btn-ghost btn-sm" href="/leads">View in pipeline</a>
+                  </div>
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </section>
   )
 }
 

@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Topbar, SubChip, CategoryBadge, LeadScoreBadge } from '../_components/components'
+import { Topbar, SubChip, CategoryBadge, LeadScoreBadge, HotNowLane } from '../_components/components'
 import { snippetWithHighlight, formatAge } from '../_components/signal-card'
 import { Icons, Spinner } from '../_components/icons'
 import { useScanCtx } from '../_components/scan-provider'
@@ -129,6 +129,8 @@ export default function LeadsPage() {
       </Topbar>
 
       <div className="content scroll">
+        <HotNowLane />
+
         {addNote && (
           <div className="card fade-in leads-note">{addNote}</div>
         )}

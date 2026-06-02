@@ -1,7 +1,9 @@
 // Early-warning alerts — pure assembly from precomputed signals. The DB reads
 // that produce the inputs live in the digest builder; this stays testable.
+import { INTENT_TYPE_LABEL, type IntentType } from './intent-patterns'
+import type { HotSignal } from './hot-signals'
 
-export type AlertKind = 'acceleration' | 'lead_surge' | 'sentiment'
+export type AlertKind = 'acceleration' | 'lead_surge' | 'sentiment' | 'hot_signal'
 export type AlertSeverity = 'low' | 'medium' | 'high'
 
 export type Alert = {
@@ -58,4 +60,27 @@ export function buildAlerts(input: AlertInputs): Alert[] {
 
   const rank: Record<AlertSeverity, number> = { high: 0, medium: 1, low: 2 }
   return alerts.sort((a, b) => rank[a.severity] - rank[b.severity])
+}
+
+// ─── Hot-signal alerts (Convert #1, speed-to-lead) ───────────────────────────
+
+/** New hot-tier signals worth alerting on: tier === 'hot', not already alerted,
+ *  capped to N (input is assumed already ranked hottest-first). Pure. */
+export function selectNewHotAlerts(
+  hot: HotSignal[],
+  alreadyAlerted: ReadonlySet<string>,
+  cap = 5,
+): HotSignal[] {
+  return hot.filter((s) => s.tier === 'hot' && !alreadyAlerted.has(s.id)).slice(0, cap)
+}
+
+/** Render one hot signal as an Alert message. */
+export function hotSignalAlert(s: HotSignal): Alert {
+  const intent = INTENT_TYPE_LABEL[s.intentType as IntentType] ?? s.intentType
+  return {
+    kind: 'hot_signal',
+    severity: 'high',
+    topic: s.topic ?? undefined,
+    message: `🔥 u/${s.author} in r/${s.subreddit} — ${intent} (score ${s.score}). Reply now: ${s.permalink}`,
+  }
 }

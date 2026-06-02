@@ -13,9 +13,14 @@ import { memoryDigest, replaceLearnedFact } from '@/lib/memory-db'
 import { loadRecalibration, loadWhatWorkedGuidance } from '@/lib/recalibrate-db'
 import { WHATS_WORKING_PREFIX } from '@/lib/recalibrate'
 import { buildDigest } from '@/lib/digest'
-import { sendDigestEmail } from '@/lib/email'
+import { sendDigestEmail, sendPlainEmail, isEmailConfigured } from '@/lib/email'
+import { loadHotSignals } from '@/lib/hot-signals-db'
+import { selectNewHotAlerts, hotSignalAlert } from '@/lib/alerts'
+import { DEFAULT_PROJECT } from '@/lib/memory'
 
 const MAX_QUERIES = 20
+const HOT_WINDOW_MS = 24 * 60 * 60 * 1000
+const HOT_ALERT_CAP = 5
 
 function strList(v: unknown): string[] {
   return Array.isArray(v)
@@ -108,6 +113,42 @@ export async function POST(req: NextRequest) {
     }
   } catch (err) {
     summary.learnError = err instanceof Error ? err.message : 'learn failed'
+  }
+
+  // 3c. Speed-to-lead: detect NEW hot-tier signals in the last 24h and alert
+  //     (batched, capped, deduped via `events` rows of kind 'hot_alert'). The
+  //     faster this job runs, the closer to real-time the alerting is.
+  try {
+    const hot = await loadHotSignals(db, { windowMs: HOT_WINDOW_MS, projectId: DEFAULT_PROJECT, limit: 50 })
+    const prior = await db.from('events').select('entity_id').eq('kind', 'hot_alert').limit(2000)
+    if (prior.error) {
+      // Can't dedupe without the events table → skip alerting to avoid re-spam.
+      summary.hotAlertSkipped = 'events table absent'
+    } else {
+      const alreadyAlerted = new Set((prior.data ?? []).map((r) => r.entity_id as string))
+      const fresh = selectNewHotAlerts(hot, alreadyAlerted, HOT_ALERT_CAP)
+      summary.hotSignalAlerts = fresh.length
+      if (fresh.length > 0) {
+        await db.from('events').insert(
+          fresh.map((s) => ({
+            project_id: DEFAULT_PROJECT,
+            entity: 'signal',
+            entity_id: s.id,
+            kind: 'hot_alert',
+            payload: { subreddit: s.subreddit, intentType: s.intentType, score: s.score, permalink: s.permalink },
+          })),
+        )
+        const alerts = fresh.map(hotSignalAlert)
+        if (isEmailConfigured()) {
+          summary.hotAlertEmailed = await sendPlainEmail(
+            `🔥 ${alerts.length} hot signal${alerts.length === 1 ? '' : 's'} — reply now`,
+            alerts.map((a) => `• ${a.message}`).join('\n'),
+          )
+        }
+      }
+    }
+  } catch (err) {
+    summary.hotAlertError = err instanceof Error ? err.message : 'hot-alert failed'
   }
 
   // 4. Re-synthesize cross-signal insights (store a new knowledge_insights row).

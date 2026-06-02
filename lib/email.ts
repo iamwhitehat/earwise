@@ -50,22 +50,18 @@ export function renderDigestText(brief: DigestBrief): string {
 }
 
 /**
- * Send the digest by email. Returns true if sent, false if email isn't
- * configured or the send failed (never throws — email is a nice-to-have).
+ * Send a plain-text email via the configured Resend account. Returns true if
+ * sent, false if email isn't configured or the send failed (never throws).
+ * Shared by the digest + the batched hot-signal alert.
  */
-export async function sendDigestEmail(brief: DigestBrief): Promise<boolean> {
+export async function sendPlainEmail(subject: string, text: string): Promise<boolean> {
   const cfg = config()
   if (!cfg) return false
   try {
     const res = await fetch(RESEND_ENDPOINT, {
       method: 'POST',
       headers: { Authorization: `Bearer ${cfg.key}`, 'content-type': 'application/json' },
-      body: JSON.stringify({
-        from: cfg.from,
-        to: cfg.to,
-        subject: `State of your market — week of ${brief.weekStart}`,
-        text: renderDigestText(brief),
-      }),
+      body: JSON.stringify({ from: cfg.from, to: cfg.to, subject, text }),
     })
     if (!res.ok) {
       console.warn('[email] send failed:', res.status)
@@ -76,4 +72,12 @@ export async function sendDigestEmail(brief: DigestBrief): Promise<boolean> {
     console.warn('[email] send error:', err)
     return false
   }
+}
+
+/** Send the weekly digest by email. */
+export async function sendDigestEmail(brief: DigestBrief): Promise<boolean> {
+  return sendPlainEmail(
+    `State of your market — week of ${brief.weekStart}`,
+    renderDigestText(brief),
+  )
 }
