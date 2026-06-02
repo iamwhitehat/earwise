@@ -3,7 +3,11 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Icons } from './icons'
+import { createSupabaseBrowserClient } from '@/lib/supabase-browser'
 import type { Project } from '@/lib/projects'
+
+// Sign-out is only offered when auth is actually configured (anon key inlined).
+const AUTH_ENABLED = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL)
 
 // Workspace switcher in the sidebar. Lists projects, switches the active one
 // (sets the rr_project cookie server-side, then reloads so every panel re-reads
@@ -13,6 +17,15 @@ export function ProjectSwitcher() {
   const [active, setActive] = useState<string>('default')
   const [open, setOpen] = useState(false)
   const [switching, setSwitching] = useState(false)
+
+  async function signOut() {
+    try {
+      await createSupabaseBrowserClient().auth.signOut()
+    } catch {
+      /* ignore — redirect to /login regardless */
+    }
+    window.location.assign('/login')
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -90,6 +103,11 @@ export function ProjectSwitcher() {
             <Link href="/welcome" className="proj-new" onClick={() => setOpen(false)}>
               <Icons.plus size={13} /> New workspace
             </Link>
+            {AUTH_ENABLED && (
+              <button type="button" className="proj-signout" onClick={signOut}>
+                <Icons.ext size={13} /> Sign out
+              </button>
+            )}
           </div>
         </>
       )}

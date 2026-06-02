@@ -1661,6 +1661,41 @@ a.accent-link:focus-visible {
   .drawer-scrim, .drawer { animation: none; }
 }
 
+/* Login (pre-auth, dark + lime) */
+.login { min-height: 100vh; display: grid; place-items: center; padding: 24px; background: var(--base, #0E0F13); }
+.login-card {
+  width: min(380px, 100%); background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r); padding: 34px 30px; text-align: center;
+}
+.login-brand { display: inline-flex; align-items: center; gap: 10px; margin-bottom: 22px; }
+.login-mark {
+  width: 34px; height: 34px; border-radius: 9px; background: var(--accent); display: grid; place-items: center;
+  box-shadow: 0 2px 10px oklch(0.92 0.22 128 / 0.40), inset 0 1px 0 oklch(1 0 0 / 0.2);
+}
+.login-word { font-size: 20px; font-weight: 700; letter-spacing: -0.04em; color: var(--ink); }
+.login-h { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; color: var(--ink); margin: 0 0 8px; }
+.login-sub { font-size: 13.5px; color: var(--ink-3); margin: 0 0 26px; line-height: 1.5; }
+.login-google {
+  display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%;
+  padding: 12px 16px; border-radius: 10px; cursor: pointer; font: inherit; font-size: 14.5px; font-weight: 600;
+  background: var(--accent); color: var(--on-signal, #0E0F13); border: 1px solid var(--accent);
+  box-shadow: 0 4px 20px oklch(0.92 0.22 128 / 0.26);
+}
+.login-google:hover:not(:disabled) { background: var(--accent-hover); }
+.login-google:disabled { opacity: .65; cursor: default; }
+.login-google svg { background: #fff; border-radius: 3px; padding: 1px; box-sizing: content-box; }
+.login-err { margin: 14px 0 0; font-size: 12.5px; color: var(--pain); }
+.login-demo { display: inline-block; margin-top: 20px; font-size: 13px; color: var(--ink-3); text-decoration: none; }
+.login-demo:hover { color: var(--ink); }
+
+/* Sign-out in the workspace menu */
+.proj-signout {
+  display: flex; align-items: center; gap: 8px; width: 100%; text-align: left;
+  padding: 6px 8px; margin-top: 2px; border-top: 1px solid var(--side-border);
+  background: none; border: none; cursor: pointer; font: inherit; font-size: 12.5px; color: var(--side-ink-3);
+}
+.proj-signout:hover { background: var(--side-bg); color: var(--side-ink); }
+
 /* Command palette ⌘K (global shell) */
 .cmdk-trigger {
   display: flex; align-items: center; gap: 8px; width: 100%;
