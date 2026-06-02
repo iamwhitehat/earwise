@@ -102,6 +102,16 @@ export function NavBar() {
 
       <ProjectSwitcher />
 
+      <button
+        type="button"
+        className="cmdk-trigger"
+        onClick={() => window.dispatchEvent(new Event('earwise:open-cmdk'))}
+      >
+        <Icons.scan size={13} />
+        <span>Search & run</span>
+        <kbd className="cmdk-kbd">⌘K</kbd>
+      </button>
+
       {NAV_GROUPS.map((group) => (
         <div key={group.label}>
           <div className="side-label">{group.label}</div>
