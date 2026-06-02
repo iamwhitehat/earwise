@@ -1382,6 +1382,47 @@ a.accent-link:focus-visible {
 }
 .ask-meta { margin-top: 10px; font-size: 11px; color: var(--ink-4); }
 
+/* Lead Score badge + why-hot popover + qualify-out (Convert #2) */
+.lead-score-wrap { position: relative; display: inline-flex; }
+.lead-score {
+  display: inline-flex; align-items: center; gap: 4px;
+  font: inherit; font-size: 12px; font-weight: 700; line-height: 1;
+  padding: 3px 8px; border-radius: 99px; border: 1px solid transparent; cursor: pointer;
+  font-variant-numeric: tabular-nums;
+}
+.lead-score.tier-hot { background: var(--accent); color: var(--on-signal, #0E0F13); }
+.lead-score.tier-warm { background: var(--advantage, #FFC53D); color: #0E0F13; }
+.lead-score.tier-cold { background: var(--surface-2); color: var(--ink-3); border-color: var(--border); }
+.lead-score:hover { filter: brightness(1.05); }
+.tier-dot { width: 8px; height: 8px; border-radius: 99px; display: inline-block; }
+.tier-dot.tier-hot { background: var(--accent); }
+.tier-dot.tier-warm { background: var(--advantage, #FFC53D); }
+.tier-dot.tier-cold { background: var(--ink-4); }
+.score-pop-backdrop { position: fixed; inset: 0; z-index: 60; }
+.score-pop {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 61; width: 240px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-sm);
+  box-shadow: 0 14px 34px rgba(0,0,0,.30); padding: 12px 13px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.score-pop-head { font-size: 12px; color: var(--ink-2); display: flex; align-items: center; gap: 7px; text-transform: capitalize; }
+.score-row { display: grid; grid-template-columns: 64px 1fr 22px; align-items: center; gap: 8px; }
+.score-label { font-size: 11.5px; color: var(--ink-3); }
+.score-bar { height: 6px; border-radius: 99px; background: var(--border); overflow: hidden; }
+.score-bar i { display: block; height: 100%; border-radius: 99px; background: var(--accent); }
+.score-pts { font-size: 11px; color: var(--ink-3); text-align: right; font-variant-numeric: tabular-nums; }
+.leads-qualify-out { margin-top: 6px; }
+.leads-qualify-out > summary {
+  list-style: none; cursor: pointer; font-size: 11.5px; color: var(--ink-3);
+  padding: 7px 9px; border: 1px dashed var(--border); border-radius: var(--r-sm);
+  display: flex; align-items: center; gap: 8px;
+}
+.leads-qualify-out > summary::-webkit-details-marker { display: none; }
+.leads-qualify-out > summary:hover { color: var(--ink-2); border-color: var(--border-2); }
+.leads-qualify-out .qo-why { margin-left: auto; font-size: 10.5px; color: var(--ink-4); font-family: var(--font-geist-mono), monospace; }
+.leads-qualify-out[open] > summary { margin-bottom: 8px; }
+.leads-qualify-out > .lead-card { opacity: .72; }
+
 /* Onboarding wizard (Phase 8) */
 .wiz { max-width: 640px; margin: 0 auto; padding: 32px 0; }
 .wiz-steps { display: flex; gap: 8px; justify-content: center; margin-bottom: 22px; }

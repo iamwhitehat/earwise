@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Topbar, SubChip, CategoryBadge } from '../_components/components'
+import { Topbar, SubChip, CategoryBadge, LeadScoreBadge } from '../_components/components'
 import { snippetWithHighlight, formatAge } from '../_components/signal-card'
 import { Icons, Spinner } from '../_components/icons'
 import { useScanCtx } from '../_components/scan-provider'
@@ -194,17 +194,29 @@ export default function LeadsPage() {
                   <span className="leads-col-count tnum">{counts[status]}</span>
                 </div>
                 <div className="leads-col-body">
-                  {byStatus[status].map((lead) => (
-                    <LeadCard
-                      key={lead.id}
-                      lead={lead}
-                      onPatch={patchLead}
-                      onRemove={removeLead}
-                    />
-                  ))}
+                  {byStatus[status]
+                    .filter((l) => l.tier !== 'cold')
+                    .map((lead) => (
+                      <LeadCard key={lead.id} lead={lead} onPatch={patchLead} onRemove={removeLead} />
+                    ))}
                   {byStatus[status].length === 0 && (
                     <div className="leads-col-empty">—</div>
                   )}
+                  {(() => {
+                    const cold = byStatus[status].filter((l) => l.tier === 'cold')
+                    if (cold.length === 0) return null
+                    return (
+                      <details className="leads-qualify-out">
+                        <summary>
+                          {cold.length} low-fit lead{cold.length === 1 ? '' : 's'}
+                          <span className="qo-why">weak intent · aged · low ICP</span>
+                        </summary>
+                        {cold.map((lead) => (
+                          <LeadCard key={lead.id} lead={lead} onPatch={patchLead} onRemove={removeLead} />
+                        ))}
+                      </details>
+                    )
+                  })()}
                 </div>
               </section>
             ))}
@@ -349,6 +361,7 @@ function LeadCard({
       </header>
 
       <div className="lead-badges">
+        <LeadScoreBadge score={lead.leadScore} tier={lead.tier} breakdown={lead.scoreBreakdown} />
         <CategoryBadge cat={lead.category as Category} />
         {lead.intentType && (
           <span className={`signal-intent intent-${lead.intentType}`}>{lead.intentType}</span>

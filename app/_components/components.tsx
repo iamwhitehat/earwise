@@ -18,6 +18,7 @@ import type { Direction, WeekSnapshot } from '@/lib/snapshots'
 import type { StarterPreset } from '@/lib/use-watchlist'
 import type { MessagingAssets, MessagingAsset } from '@/lib/insight-types'
 import type { MaterializedOpportunity, AdvantageComponents } from '@/lib/advantage'
+import { scoreReason, SCORE_WEIGHTS, type Tier, type ScoreBreakdown, type FactorKey } from '@/lib/lead-score'
 import { SYNTH_TIERS, SYNTH_TIER_LABEL, type SynthTier } from '@/lib/use-synth-model'
 import { canonicalTopic } from '@/lib/topics'
 import { toCsv, toMarkdown, downloadFile } from '@/lib/csv'
@@ -824,6 +825,67 @@ function AdvantageBreakdown({ opp }: { opp: MaterializedOpportunity }) {
       })}
       {fresh && <div className="adv-fresh">{fresh}</div>}
     </div>
+  )
+}
+
+// ─── Lead Score badge + "why hot?" popover (Convert #2) ──────────────────────
+
+const FACTOR_LABEL: Record<FactorKey, string> = {
+  intent: 'Intent',
+  recency: 'Recency',
+  icpFit: 'ICP fit',
+  engagement: 'Engagement',
+}
+const FACTOR_ORDER: FactorKey[] = ['intent', 'recency', 'icpFit', 'engagement']
+
+/** Tier-colored Lead Score badge (lime/amber/muted), tabular mono. Tap for the
+ *  "why hot?" breakdown popover. Reused on the leads board + the hot-now lane. */
+export function LeadScoreBadge({
+  score,
+  tier,
+  breakdown,
+}: {
+  score: number | null
+  tier: Tier | null
+  breakdown?: ScoreBreakdown | null
+}) {
+  const [open, setOpen] = useState(false)
+  if (score == null || !tier) return null
+  return (
+    <span className="lead-score-wrap">
+      <button
+        type="button"
+        className={`lead-score tier-${tier}`}
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        title="Why this score?"
+      >
+        {tier === 'hot' && <span aria-hidden="true">🔥</span>}
+        <span className="tnum">{score}</span>
+      </button>
+      {open && breakdown && (
+        <>
+          <div className="score-pop-backdrop" onClick={() => setOpen(false)} aria-hidden="true" />
+          <div className="score-pop" role="dialog" aria-label="Lead score breakdown">
+            <div className="score-pop-head">
+              <span className={`tier-dot tier-${tier}`} aria-hidden="true" />
+              <strong>{tier}</strong> · {scoreReason({ score, tier, breakdown })}
+            </div>
+            {FACTOR_ORDER.map((k) => (
+              <div className="score-row" key={k}>
+                <span className="score-label">{FACTOR_LABEL[k]}</span>
+                <span className="score-bar" aria-hidden="true">
+                  <i style={{ width: `${Math.round(breakdown[k].value * 100)}%` }} />
+                </span>
+                <span className="score-pts tnum" title={`${breakdown[k].points} of ${Math.round(SCORE_WEIGHTS[k] * 100)} pts`}>
+                  {breakdown[k].points}
+                </span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </span>
   )
 }
 

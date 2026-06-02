@@ -2,6 +2,7 @@ import type { NextRequest } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
 import { normalizeLeadInput, mapLeadRow, type NormalizedLead } from '@/lib/leads'
 import { logLeadEvent, LEADS_MIGRATION_HINT, LEAD_COLUMNS } from '@/lib/leads-db'
+import { scoreLeads } from '@/lib/leads-score-db'
 import { activeProjectId } from '@/lib/project-server'
 
 const MAX_BULK = 100
@@ -79,6 +80,10 @@ export async function POST(req: NextRequest) {
   for (const r of insertedRows) {
     const lead = mapLeadRow(r)
     await logLeadEvent(db, lead.id, 'created', { external_id: lead.externalId, via: 'bulk' })
+  }
+  // Best-effort: score + persist the freshly added leads (lazy backfill).
+  if (insertedRows.length > 0) {
+    await scoreLeads(db, insertedRows.map((r) => mapLeadRow(r)), projectId)
   }
 
   return Response.json({

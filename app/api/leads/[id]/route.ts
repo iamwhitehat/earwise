@@ -2,6 +2,7 @@ import type { NextRequest } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
 import { isValidStatus, mapLeadRow } from '@/lib/leads'
 import { logLeadEvent, LEADS_MIGRATION_HINT, LEAD_COLUMNS } from '@/lib/leads-db'
+import { scoreLeads } from '@/lib/leads-score-db'
 import { logEvent } from '@/lib/events-db'
 import { statusToEventKind } from '@/lib/events'
 import { activeProjectId } from '@/lib/project-server'
@@ -89,7 +90,8 @@ export async function PATCH(req: NextRequest, ctx: RouteContext<'/api/leads/[id]
     }
   }
 
-  return Response.json({ lead })
+  const [scored] = await scoreLeads(db, [lead], projectId)
+  return Response.json({ lead: scored ?? lead })
 }
 
 // DELETE /api/leads/[id]  — remove a lead (its events cascade away).

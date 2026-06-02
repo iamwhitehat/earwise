@@ -7,11 +7,22 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 export const LEADS_MIGRATION_HINT =
   'If the message names a missing table or column, run the Leads migration in SETUP.md (section 2b-decies).'
 
-/** Column projection for a full lead row, shared by every leads route. */
-export const LEAD_COLUMNS =
-  'id, source, kind, external_id, post_id, subreddit, permalink, author, ' +
-  'topic, intent_type, category, excerpt, opener_draft, status, notes, ' +
-  'created_at, last_event_at'
+// Select every column so reads stay column-tolerant across migrations — the
+// Convert-core score/tier/follow-up columns are picked up only once they exist,
+// and mapLeadRow falls back to nulls when they don't.
+export const LEAD_COLUMNS = '*'
+
+/** Best-effort persist of a computed Lead Score. Silently no-ops when the
+ *  lead_score/tier columns aren't migrated yet (lazy backfill). */
+export async function persistLeadScore(
+  db: SupabaseClient,
+  leadId: number,
+  leadScore: number,
+  tier: string,
+): Promise<void> {
+  const { error } = await db.from('leads').update({ lead_score: leadScore, tier }).eq('id', leadId)
+  if (error) console.warn('[leads] score persist skipped:', error.message)
+}
 
 /**
  * Append a row to lead_events. Best-effort: a logging failure is recorded but

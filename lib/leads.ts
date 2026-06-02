@@ -1,6 +1,7 @@
 // Pure lead-pipeline logic shared by the API routes, the client board, and
 // the tests. No `server-only`, no Supabase — keep this importable from a
 // plain Node/vitest context.
+import type { Tier, ScoreBreakdown } from './lead-score'
 
 export const LEAD_STATUSES = [
   'new',
@@ -149,6 +150,14 @@ export type Lead = {
   notes: string | null
   createdAt: number
   lastEventAt: number
+  // Convert-core (lead scoring + conversation). Score/tier are computed fresh
+  // on read (authoritative) and best-effort persisted; breakdown is attached by
+  // the server for the "why hot?" popover and isn't stored.
+  leadScore: number | null
+  tier: Tier | null
+  scoreBreakdown: ScoreBreakdown | null
+  nextFollowUpAt: number | null
+  sequenceStep: number
 }
 
 /** Map a raw Supabase row to the client Lead shape. Tolerant of missing
@@ -178,6 +187,13 @@ export function mapLeadRow(rowRaw: unknown): Lead {
     lastEventAt: row.last_event_at
       ? new Date(row.last_event_at as string).getTime()
       : Date.now(),
+    leadScore: typeof row.lead_score === 'number' ? row.lead_score : null,
+    tier: (row.tier as Tier | null) ?? null,
+    scoreBreakdown: null,
+    nextFollowUpAt: row.next_follow_up_at
+      ? new Date(row.next_follow_up_at as string).getTime()
+      : null,
+    sequenceStep: typeof row.sequence_step === 'number' ? row.sequence_step : 0,
   }
 }
 

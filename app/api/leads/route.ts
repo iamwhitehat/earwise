@@ -8,6 +8,7 @@ import {
   type LeadStatus,
 } from '@/lib/leads'
 import { logLeadEvent, LEADS_MIGRATION_HINT, LEAD_COLUMNS } from '@/lib/leads-db'
+import { scoreLeads, sortHotFirst } from '@/lib/leads-score-db'
 import { activeProjectId } from '@/lib/project-server'
 
 // GET /api/leads?status=  — list leads (newest activity first) + per-status
@@ -59,7 +60,10 @@ export async function GET(req: NextRequest) {
     if (isValidStatus(s)) counts[s]++
   }
 
-  const leads = (listRes.data ?? []).map((r) => mapLeadRow(r))
+  // Score each lead fresh (authoritative), lazily backfill stored scores, and
+  // sort hot-first by default — the Convert "Hot first" board.
+  const scored = await scoreLeads(db, (listRes.data ?? []).map((r) => mapLeadRow(r)), projectId)
+  const leads = sortHotFirst(scored)
   const total = (countRes.data ?? []).length
 
   return Response.json({ leads, counts, total })
@@ -113,7 +117,8 @@ export async function POST(req: NextRequest) {
   if (inserted) {
     const lead = mapLeadRow(inserted)
     await logLeadEvent(db, lead.id, 'created', { external_id: lead.externalId })
-    return Response.json({ lead, created: true }, { status: 201 })
+    const [scored] = await scoreLeads(db, [lead], projectId)
+    return Response.json({ lead: scored ?? lead, created: true }, { status: 201 })
   }
 
   // Already in the pipeline — return the existing row.
@@ -133,7 +138,8 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  return Response.json({ lead: mapLeadRow(existing), created: false })
+  const [scoredExisting] = await scoreLeads(db, [mapLeadRow(existing)], projectId)
+  return Response.json({ lead: scoredExisting ?? mapLeadRow(existing), created: false })
 }
 
 export type { LeadStatus }
