@@ -21,6 +21,7 @@ import type { MaterializedOpportunity, AdvantageComponents } from '@/lib/advanta
 import { scoreReason, SCORE_WEIGHTS, type Tier, type ScoreBreakdown, type FactorKey } from '@/lib/lead-score'
 import { INTENT_TYPE_LABEL, type IntentType } from '@/lib/intent-patterns'
 import type { HotSignal } from '@/lib/hot-signals'
+import { buildFunnel, funnelLeak, type FunnelStage } from '@/lib/funnel'
 import { SYNTH_TIERS, SYNTH_TIER_LABEL, type SynthTier } from '@/lib/use-synth-model'
 import { canonicalTopic } from '@/lib/topics'
 import { toCsv, toMarkdown, downloadFile } from '@/lib/csv'
@@ -891,6 +892,60 @@ export function LeadScoreBadge({
         </>
       )}
     </span>
+  )
+}
+
+// ─── Conversion funnel (Convert #6) ──────────────────────────────────────────
+
+type FunnelSummary = {
+  funnel: { draftsSent: number; replies: number; callsBooked: number; conversions: number; passed: number }
+}
+
+/** Funnel strip with step rates + a single amber leak flag (worst step) and its
+ *  suggested fix. Fed by /api/events/summary; hides until anything's been sent. */
+export function FunnelStrip() {
+  const [stages, setStages] = useState<FunnelStage[] | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/events/summary')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: FunnelSummary | null) => {
+        if (!cancelled && j?.funnel) setStages(buildFunnel(j.funnel))
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  if (!stages) return null
+  const contacted = stages.find((s) => s.key === 'contacted')?.count ?? 0
+  if (contacted === 0) return null
+  const leak = funnelLeak(stages)
+
+  return (
+    <section className="section">
+      <div className="section-head">
+        <h2>Conversion funnel</h2>
+        <span className="hint">where leads move — and where they leak</span>
+      </div>
+      <div className="funnel">
+        {stages.map((s) => (
+          <div key={s.key} className={`funnel-stage${s.leak ? ' leak' : ''}`}>
+            <span className="funnel-count tnum">{s.count}</span>
+            <span className="funnel-label">{s.label}</span>
+            {s.rate != null && <span className="funnel-rate tnum">{Math.round(s.rate * 100)}%</span>}
+          </div>
+        ))}
+      </div>
+      {leak && (
+        <div className="funnel-leak">
+          <Icons.alert size={13} />
+          <span><strong>{leak.stage.label} is leaking.</strong> {leak.hint}</span>
+        </div>
+      )}
+    </section>
   )
 }
 
