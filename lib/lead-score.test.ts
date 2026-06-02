@@ -17,6 +17,17 @@ describe('scoreLead — intent ordering', () => {
   })
 })
 
+describe('scoreLead — relevance factor', () => {
+  const base = { intentType: 'looking-for' as const, postedAt: NOW, icpFit: 0.5, engagement: 0, now: NOW }
+  it('on-niche outranks off-niche', () => {
+    const on = scoreLead({ ...base, relevance: 1 })
+    const off = scoreLead({ ...base, relevance: 0 })
+    expect(on.score).toBeGreaterThan(off.score)
+    expect(on.breakdown.relevance.points).toBe(Math.round(SCORE_WEIGHTS.relevance * 100))
+    expect(off.breakdown.relevance.points).toBe(0)
+  })
+})
+
 describe('scoreLead — recency decay', () => {
   const base = { intentType: 'willing-to-pay' as const, icpFit: 0.5, engagement: 0, now: NOW }
   it('fresh outranks aged outranks stale', () => {
@@ -52,10 +63,11 @@ describe('scoreLead — tiers', () => {
 })
 
 describe('scoreLead — defaults when factors absent', () => {
-  it('icpFit defaults to 0.5, engagement to 0', () => {
+  it('icpFit defaults to 0.5, engagement to 0, relevance to 0.5', () => {
     const s = scoreLead({ intentType: 'switching', postedAt: NOW, now: NOW })
     expect(s.breakdown.icpFit.value).toBe(0.5)
     expect(s.breakdown.engagement.value).toBe(0)
+    expect(s.breakdown.relevance.value).toBe(0.5)
   })
   it('clamps out-of-range inputs', () => {
     const s = scoreLead({ intentType: 'switching', postedAt: NOW, icpFit: 2, engagement: -1, now: NOW })
@@ -66,8 +78,9 @@ describe('scoreLead — defaults when factors absent', () => {
 
 describe('scoreLead — breakdown + weights', () => {
   it('points reflect weight × value × 100', () => {
-    const s = scoreLead({ intentType: 'willing-to-pay', postedAt: NOW, icpFit: 1, engagement: 1, now: NOW })
+    const s = scoreLead({ intentType: 'willing-to-pay', relevance: 1, postedAt: NOW, icpFit: 1, engagement: 1, now: NOW })
     expect(s.breakdown.intent.points).toBe(Math.round(SCORE_WEIGHTS.intent * 1 * 100))
+    expect(s.breakdown.relevance.points).toBe(Math.round(SCORE_WEIGHTS.relevance * 1 * 100))
     expect(s.score).toBe(100)
   })
   it('scoreReason names the strong factors', () => {

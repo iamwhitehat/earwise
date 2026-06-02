@@ -838,11 +838,12 @@ function AdvantageBreakdown({ opp }: { opp: MaterializedOpportunity }) {
 
 const FACTOR_LABEL: Record<FactorKey, string> = {
   intent: 'Intent',
+  relevance: 'Relevance',
   recency: 'Recency',
   icpFit: 'ICP fit',
   engagement: 'Engagement',
 }
-const FACTOR_ORDER: FactorKey[] = ['intent', 'recency', 'icpFit', 'engagement']
+const FACTOR_ORDER: FactorKey[] = ['intent', 'relevance', 'recency', 'icpFit', 'engagement']
 
 /** Tier-colored Lead Score badge (lime/amber/muted), tabular mono. Tap for the
  *  "why hot?" breakdown popover. Reused on the leads board + the hot-now lane. */
@@ -1052,7 +1053,7 @@ export function HotNowLane({ window = '24h', limit = 6 }: { window?: string; lim
                 <span className="hotnow-author">u/{s.author}</span>
                 <SubChip sub={s.subreddit} />
                 <span className="hotnow-intent">{INTENT_TYPE_LABEL[s.intentType as IntentType] ?? s.intentType}</span>
-                <LeadScoreBadge score={s.score} tier={s.tier} breakdown={null} />
+                <LeadScoreBadge score={s.score} tier={s.tier} breakdown={s.breakdown} />
                 <span className={`hotnow-age tnum${age.fresh ? ' fresh' : ''}`}>{age.label}</span>
                 <a className="hotnow-view" href={s.permalink} target="_blank" rel="noopener noreferrer" title="Open thread">↗</a>
                 {r.status === 'done' ? (

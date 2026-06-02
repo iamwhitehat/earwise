@@ -22,17 +22,34 @@ function sig(over: Partial<SignalRow>): SignalRow {
   }
 }
 
-const hot = (over: Partial<HotSignal>): HotSignal => ({ ...sig({}), score: 50, tier: 'warm', ...over })
+const EMPTY_BREAKDOWN = {
+  intent: { value: 0, points: 0 },
+  relevance: { value: 0, points: 0 },
+  recency: { value: 0, points: 0 },
+  icpFit: { value: 0, points: 0 },
+  engagement: { value: 0, points: 0 },
+}
+const hot = (over: Partial<HotSignal>): HotSignal => ({
+  ...sig({}),
+  score: 50,
+  tier: 'warm',
+  breakdown: EMPTY_BREAKDOWN,
+  ...over,
+})
 
 describe('scoreSignal', () => {
-  it('willing-to-pay + fresh + strong ICP scores hot', () => {
-    const s = scoreSignal(sig({ intentType: 'willing-to-pay', analyzedAt: NOW }), 1, NOW)
+  it('willing-to-pay + fresh + strong ICP + on-niche scores hot', () => {
+    const s = scoreSignal(sig({ intentType: 'willing-to-pay', analyzedAt: NOW }), 1, 1, NOW)
     expect(s.tier).toBe('hot')
     expect(s.score).toBeGreaterThanOrEqual(70)
   })
-  it('old looking-for with no ICP scores cold', () => {
-    const s = scoreSignal(sig({ intentType: 'looking-for', analyzedAt: NOW - 60 * 86_400_000 }), 0, NOW)
+  it('old looking-for with no ICP + off-niche scores cold', () => {
+    const s = scoreSignal(sig({ intentType: 'looking-for', analyzedAt: NOW - 60 * 86_400_000 }), 0, 0, NOW)
     expect(s.tier).toBe('cold')
+  })
+  it('carries the relevance factor in the breakdown', () => {
+    const s = scoreSignal(sig({ intentType: 'looking-for', analyzedAt: NOW }), 0.5, 0.8, NOW)
+    expect(s.breakdown.relevance.value).toBeCloseTo(0.8)
   })
 })
 

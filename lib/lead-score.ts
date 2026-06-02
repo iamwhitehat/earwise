@@ -5,14 +5,16 @@ import type { IntentType } from './intent-patterns'
 
 export type Tier = 'hot' | 'warm' | 'cold'
 
-export type FactorKey = 'intent' | 'recency' | 'icpFit' | 'engagement'
+export type FactorKey = 'intent' | 'relevance' | 'recency' | 'icpFit' | 'engagement'
 
-/** Weights sum to 1.0 — see REDESIGN-SPEC › Convert #2. */
+/** Weights sum to 1.0. Relevance (on-niche fit to the active project) is a
+ *  first-class factor alongside intent — see RELEVANCE-INTENT-GATE-PATCH §4. */
 export const SCORE_WEIGHTS: Record<FactorKey, number> = {
-  intent: 0.45,
-  recency: 0.25,
-  icpFit: 0.2,
-  engagement: 0.1,
+  intent: 0.35,
+  relevance: 0.3,
+  recency: 0.2,
+  icpFit: 0.1,
+  engagement: 0.05,
 }
 
 export const TIER_HOT = 70
@@ -35,6 +37,8 @@ const clamp01 = (x: number): number => (x < 0 ? 0 : x > 1 ? 1 : x)
 
 export type ScoreInput = {
   intentType?: IntentType | string | null
+  /** Relevance to the active project 0..1 (default 0.5 neutral when unknown). */
+  relevance?: number | null
   /** Epoch ms the lead was posted/created. Absent → neutral recency. */
   postedAt?: number | null
   /** ICP match 0..1 (default 0.5 when business memory is empty). */
@@ -75,6 +79,7 @@ export function scoreLead(input: ScoreInput): LeadScore {
   const now = input.now ?? Date.now()
   const factors: Record<FactorKey, number> = {
     intent: intentFactor(input.intentType),
+    relevance: clamp01(input.relevance ?? 0.5),
     recency: recencyFactor(input.postedAt, now),
     icpFit: clamp01(input.icpFit ?? 0.5),
     engagement: clamp01(input.engagement ?? 0),
@@ -95,6 +100,7 @@ export function scoreLead(input: ScoreInput): LeadScore {
 
 const FACTOR_LABEL: Record<FactorKey, string> = {
   intent: 'intent',
+  relevance: 'relevance',
   recency: 'recency',
   icpFit: 'ICP fit',
   engagement: 'engagement',

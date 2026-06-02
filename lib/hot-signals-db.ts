@@ -31,7 +31,11 @@ export async function loadHotSignals(
 
   const memText = fitText(memFacts)
   const scored = qualified.map((s) =>
-    scoreSignal(s, computeFitToYou(memText, `${s.topic ?? ''} ${s.text}`)),
+    scoreSignal(
+      s,
+      computeFitToYou(memText, `${s.topic ?? ''} ${s.text}`),
+      relevance.get(keyOf(s))?.score ?? 1,
+    ),
   )
   return rankHotSignals(scored, { limit: opts.limit, minScore: opts.minScore })
 }
