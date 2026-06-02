@@ -85,6 +85,7 @@ export function CommandPalette() {
   const goCmds: Cmd[] = useMemo(
     () => [
       { id: 'today', label: 'Today', hint: 'home', run: () => { router.push('/today'); close() } },
+      { id: 'opps', label: 'Opportunities', hint: 'ranked', run: () => { router.push('/opportunities'); close() } },
       { id: 'pipeline', label: 'Pipeline · Leads', run: () => { router.push('/pipeline'); close() } },
       { id: 'voice', label: 'Customer Voice', run: () => { router.push('/customer-voice'); close() } },
       { id: 'insights', label: 'Insights', run: () => { router.push('/insights'); close() } },

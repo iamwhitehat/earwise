@@ -117,6 +117,9 @@ export default function TodayPage() {
             <div className="section-head">
               <h2>Opportunities to decide</h2>
               <span className="pill">ranked by Advantage</span>
+              <Link href="/opportunities" className="btn btn-ghost btn-sm" style={{ marginLeft: 'auto', textDecoration: 'none' }}>
+                View all <Icons.chev size={12} />
+              </Link>
             </div>
             <div className="opp-grid">
               {topOpps.map((opp, i) => (
