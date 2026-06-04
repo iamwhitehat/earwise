@@ -39,3 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# build:exe artifacts
+/reddit-reader.exe
+/scripts/sea-blob.blob

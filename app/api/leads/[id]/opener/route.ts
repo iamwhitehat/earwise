@@ -11,6 +11,8 @@ import {
 import { logEvent } from '@/lib/events-db'
 import { loadWhatWorkedGuidance } from '@/lib/recalibrate-db'
 import { activeProjectId } from '@/lib/project-server'
+import { loadVoiceSamples } from '@/lib/voice-db'
+import { loadVoiceBrief } from '@/lib/voice-brief-db'
 
 const VALUEPROP_MAX = 280
 
@@ -93,8 +95,11 @@ export async function POST(req: NextRequest, ctx: RouteContext<'/api/leads/[id]/
     typeof b.valueProp === 'string' && b.valueProp.trim()
       ? b.valueProp.trim().slice(0, VALUEPROP_MAX)
       : null
+  const projectId = await activeProjectId()
   const phrases = await topBuyerPhrases(db)
-  const guidance = await loadWhatWorkedGuidance(db, await activeProjectId())
+  const guidance = await loadWhatWorkedGuidance(db, projectId)
+  const voiceSamples = await loadVoiceSamples(db, projectId)
+  const voiceBrief = (await loadVoiceBrief(db, projectId))?.brief ?? null
 
   const opener = await draftOpener({
     author: lead.author,
@@ -105,6 +110,8 @@ export async function POST(req: NextRequest, ctx: RouteContext<'/api/leads/[id]/
     valueProp,
     phrases,
     guidance,
+    voiceSamples,
+    voiceBrief,
   })
 
   if (!opener) {

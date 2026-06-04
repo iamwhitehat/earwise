@@ -84,15 +84,17 @@ export function CommandPalette() {
 
   const goCmds: Cmd[] = useMemo(
     () => [
-      { id: 'today', label: 'Today', hint: 'home', run: () => { router.push('/today'); close() } },
-      { id: 'opps', label: 'Opportunities', hint: 'ranked', run: () => { router.push('/opportunities'); close() } },
-      { id: 'pipeline', label: 'Pipeline · Leads', run: () => { router.push('/pipeline'); close() } },
-      { id: 'voice', label: 'Customer Voice', run: () => { router.push('/customer-voice'); close() } },
-      { id: 'insights', label: 'Insights', run: () => { router.push('/insights'); close() } },
-      { id: 'signals', label: 'Signal feed', run: () => { router.push('/signals'); close() } },
+      { id: 'today', label: 'Home', hint: 'today', run: () => { router.push('/today'); close() } },
+      { id: 'voice', label: 'Voice · Positioning', hint: 'the words', run: () => { router.push('/voice'); close() } },
+      { id: 'words', label: 'Voice · Words', hint: 'customer voice', run: () => { router.push('/voice?view=words'); close() } },
+      { id: 'pipeline', label: 'Act · Leads', run: () => { router.push('/pipeline'); close() } },
       { id: 'explore', label: 'Discover', run: () => { router.push('/explore'); close() } },
+      { id: 'opps', label: 'Opportunities', hint: 'ranked', run: () => { router.push('/today?view=opportunities'); close() } },
+      { id: 'insights', label: 'Insights', run: () => { router.push('/insights'); close() } },
+      { id: 'signals', label: 'Signal feed', run: () => { router.push('/today?view=signals'); close() } },
       { id: 'digest', label: 'Digest', run: () => { router.push('/digest'); close() } },
       { id: 'guide', label: 'Plan', run: () => { router.push('/pipeline?view=plan'); close() } },
+      { id: 'settings', label: 'Settings', run: () => { router.push('/settings'); close() } },
     ],
     [router, close],
   )

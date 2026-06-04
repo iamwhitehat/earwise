@@ -1,209 +1,60 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
-import { Topbar, AdvantageOpportunityCard, HotNowLane } from '../_components/components'
-import { Icons, Spinner } from '../_components/icons'
+import { Topbar } from '../_components/components'
 import { useScanCtx } from '../_components/scan-provider'
-import type { MaterializedOpportunity } from '@/lib/advantage'
-import { emptyStatusCounts, type LeadStatus } from '@/lib/leads'
-import type { StoredDigest } from '@/lib/digest-types'
+import { TodayView } from '../_components/today-view'
+import { OpportunitiesView } from '../_components/opportunities-view'
+import { SignalsView } from '../_components/signals-view'
 
-// Today — the triage inbox (REDESIGN-SPEC › Zaslon 1). A prioritized queue of
-// decisions, not a dashboard: hot signals to reply to, opportunities to
-// pursue/park, and the pipeline nudge. Reuses HotNowLane + AdvantageOpportunityCard.
-const TOP_OPPS = 3
+// Home — the consolidated "what's happening / what to act on" surface. Today,
+// the ranked Opportunities list, and the Signal feed are URL-persisted tabs
+// (?view=), mirroring Pipeline/Voice. /signals and /opportunities redirect in.
+type View = 'today' | 'opportunities' | 'signals'
+const VIEWS: { id: View; label: string }[] = [
+  { id: 'today', label: 'Today' },
+  { id: 'opportunities', label: 'Opportunities' },
+  { id: 'signals', label: 'Signals' },
+]
 
-export default function TodayPage() {
+function HomeInner() {
   const scan = useScanCtx()
-  const router = useRouter()
-  const [opps, setOpps] = useState<MaterializedOpportunity[] | null>(null)
-  const [counts, setCounts] = useState<Record<LeadStatus, number>>(emptyStatusCounts())
-  const [loading, setLoading] = useState(true)
-  const [digest, setDigest] = useState<StoredDigest | null>(null)
-
-  // Weekly brief, relocated from the Advanced nav onto Today as a compact card.
-  useEffect(() => {
-    let cancelled = false
-    fetch('/api/digest')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((json: StoredDigest | null) => {
-        if (!cancelled && json) setDigest(json)
-      })
-      .catch(() => {})
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  useEffect(() => {
-    let cancelled = false
-    Promise.all([
-      fetch('/api/opportunities').then((r) => (r.ok ? r.json() : { opportunities: [] })).catch(() => ({ opportunities: [] })),
-      fetch('/api/leads').then((r) => (r.ok ? r.json() : null)).catch(() => null),
-    ])
-      .then(([oppJson, leadJson]) => {
-        if (cancelled) return
-        setOpps((oppJson as { opportunities?: MaterializedOpportunity[] }).opportunities ?? [])
-        if (leadJson && (leadJson as { counts?: Record<LeadStatus, number> }).counts) {
-          setCounts((leadJson as { counts: Record<LeadStatus, number> }).counts)
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  const topOpps = useMemo(() => (opps ?? []).slice(0, TOP_OPPS), [opps])
-  const freshest = useMemo(
-    () => (opps ?? []).reduce((max, o) => Math.max(max, o.updatedAt ?? 0), 0),
-    [opps],
-  )
-  const newLeads = counts.new
-  const contacted = counts.contacted
-
-  const sinceLine = useMemo(() => {
-    const parts: string[] = []
-    if ((opps?.length ?? 0) > 0) parts.push(`${opps!.length} opportunit${opps!.length === 1 ? 'y' : 'ies'}`)
-    if (newLeads > 0) parts.push(`${newLeads} new lead${newLeads === 1 ? '' : 's'}`)
-    if (contacted > 0) parts.push(`${contacted} awaiting reply`)
-    return parts.length > 0 ? parts.join(' · ') : 'Your market at a glance'
-  }, [opps, newLeads, contacted])
-
-  // Inbox-zero card is gated on opps/leads being empty. HotNowLane shows its own
-  // honest empty state ("no hot, on-niche leads right now") independently.
-  const nothing = !loading && topOpps.length === 0 && newLeads === 0 && contacted === 0
+  const params = useSearchParams()
+  const raw = params.get('view')
+  const view: View = raw === 'opportunities' || raw === 'signals' ? raw : 'today'
 
   return (
     <>
-      <Topbar title="Today" posts={scan.posts}>
-        <span className="today-fresh tnum">
-          {freshest ? `updated ${formatAgo(freshest)}` : ''}
-        </span>
+      <Topbar title="Home" posts={scan.posts} hideStats>
+        <nav className="seg" aria-label="Home view">
+          {VIEWS.map((v) => (
+            <Link
+              key={v.id}
+              href={`/today?view=${v.id}`}
+              className={`seg-btn${view === v.id ? ' on' : ''}`}
+              aria-current={view === v.id ? 'page' : undefined}
+            >
+              {v.label}
+            </Link>
+          ))}
+        </nav>
       </Topbar>
 
       <div className="content scroll">
-        <div className="today-top">
-          <p className="today-since">{sinceLine}</p>
-          <button
-            type="button"
-            className="today-ask"
-            onClick={() => window.dispatchEvent(new CustomEvent('earwise:open-cmdk', { detail: { mode: 'ask' } }))}
-          >
-            <Icons.compass size={13} /> Ask your market
-          </button>
-        </div>
-
-        <HotNowLane />
-
-        {digest && (
-          <section className="section">
-            <Link href="/digest" className="today-digest" aria-label="Open the weekly digest">
-              <span className="today-digest-tag">This week</span>
-              <span className="today-digest-main">
-                <strong>State of your market</strong>
-                <span className="today-digest-sum">
-                  {digest.brief.moves.length} move{digest.brief.moves.length === 1 ? '' : 's'} ·{' '}
-                  {digest.brief.newOpportunities.length} opportunit{digest.brief.newOpportunities.length === 1 ? 'y' : 'ies'}
-                  {digest.brief.alerts.length > 0 ? ` · ${digest.brief.alerts.length} alert${digest.brief.alerts.length === 1 ? '' : 's'}` : ''}
-                </span>
-              </span>
-              <span className="today-digest-go">Open <Icons.chev size={12} /></span>
-            </Link>
-          </section>
-        )}
-
-        {loading && (
-          <div className="empty" style={{ padding: 40 }}>
-            <Spinner size={18} color="var(--ink-3)" /> Loading your triage…
-          </div>
-        )}
-
-        {!loading && (newLeads > 0 || contacted > 0) && (
-          <section className="section">
-            <div className="section-head">
-              <h2>Pipeline</h2>
-              <span className="hint">turn intent into conversations</span>
-            </div>
-            <div className="today-card">
-              <div className="today-card-main">
-                <span className="today-card-type">Leads · high intent</span>
-                <p className="today-card-title">
-                  {newLeads > 0
-                    ? `${newLeads} new lead${newLeads === 1 ? '' : 's'} ready for a first message`
-                    : `${contacted} contacted — follow up while it's warm`}
-                </p>
-              </div>
-              <Link href="/pipeline" className="btn btn-primary btn-sm">
-                {newLeads > 0 ? 'Draft openers' : 'Open pipeline'}
-              </Link>
-            </div>
-          </section>
-        )}
-
-        {!loading && topOpps.length > 0 && (
-          <section className="section">
-            <div className="section-head">
-              <h2>Opportunities to decide</h2>
-              <span className="pill">ranked by Advantage</span>
-              <Link href="/opportunities" className="btn btn-ghost btn-sm" style={{ marginLeft: 'auto', textDecoration: 'none' }}>
-                View all <Icons.chev size={12} />
-              </Link>
-            </div>
-            <div className="opp-grid">
-              {topOpps.map((opp, i) => (
-                <AdvantageOpportunityCard
-                  key={opp.topic}
-                  opp={opp}
-                  rank={i}
-                  selected={false}
-                  onSelect={() => router.push(`/opportunities/${encodeURIComponent(opp.topic)}`)}
-                />
-              ))}
-            </div>
-          </section>
-        )}
-
-        {nothing && (
-          <div className="card empty fade-in">
-            <span className="e-ico">
-              <Icons.radar size={26} />
-            </span>
-            <div style={{ marginBottom: 14 }}>
-              You&apos;re caught up. Run a scan to surface fresh demand, or explore your opportunities.
-            </div>
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={scan.scanAll}
-                disabled={scan.anyStreaming}
-              >
-                {scan.anyStreaming ? <><Spinner size={13} /> Scanning…</> : <><Icons.scan size={14} /> Run a scan</>}
-              </button>
-              <Link href="/" className="btn btn-ghost" style={{ textDecoration: 'none' }}>
-                Explore opportunities
-              </Link>
-            </div>
-          </div>
-        )}
-
-        <div className="today-keys">
-          <kbd>⌘K</kbd> search &amp; run · <kbd>e</kbd> act · <kbd>s</kbd> snooze · <kbd>j/k</kbd> move
-        </div>
+        {view === 'today' && <TodayView />}
+        {view === 'opportunities' && <OpportunitiesView />}
+        {view === 'signals' && <SignalsView />}
       </div>
     </>
   )
 }
 
-function formatAgo(ts: number): string {
-  const diff = Date.now() - ts
-  if (diff < 60_000) return 'just now'
-  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`
-  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`
-  return `${Math.floor(diff / 86_400_000)}d ago`
+export default function HomePage() {
+  return (
+    <Suspense fallback={null}>
+      <HomeInner />
+    </Suspense>
+  )
 }

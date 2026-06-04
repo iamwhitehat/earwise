@@ -24,6 +24,7 @@ export default function DigestPage() {
   const [brief, setBrief] = useState<DigestBrief | null>(null)
   const [running, setRunning] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [emailStatus, setEmailStatus] = useState<'idle' | 'sending' | 'sent' | 'unconfigured' | 'error'>('idle')
 
   useEffect(() => {
     let cancelled = false
@@ -61,9 +62,42 @@ export default function DigestPage() {
     }
   }
 
+  async function handleEmail() {
+    if (!brief || emailStatus === 'sending') return
+    setEmailStatus('sending')
+    try {
+      const res = await fetch('/api/digest/email', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ brief }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error()
+      if (json.configured === false) setEmailStatus('unconfigured')
+      else setEmailStatus(json.sent ? 'sent' : 'error')
+    } catch {
+      setEmailStatus('error')
+    } finally {
+      setTimeout(() => setEmailStatus('idle'), 4000)
+    }
+  }
+
   return (
     <>
       <Topbar title="Digest" posts={scan.posts}>
+        {emailStatus !== 'idle' && (
+          <span className="hint" aria-live="polite">
+            {emailStatus === 'sending' && 'Sending…'}
+            {emailStatus === 'sent' && <span style={{ color: 'var(--score-high)' }}>Emailed ✓</span>}
+            {emailStatus === 'unconfigured' && <span style={{ color: 'var(--ink-3)' }}>Email not set up (RESEND_API_KEY)</span>}
+            {emailStatus === 'error' && <span style={{ color: 'var(--pain)' }}>Send failed</span>}
+          </span>
+        )}
+        {brief && (
+          <button type="button" className="btn btn-ghost btn-sm" onClick={handleEmail} disabled={emailStatus === 'sending'}>
+            <Icons.bell size={13} /> Email me
+          </button>
+        )}
         <SynthModelSelect value={tier} onChange={setTier} disabled={running} />
         <button type="button" className="btn btn-primary btn-sm" onClick={handleRun} disabled={running}>
           {running ? (
@@ -109,6 +143,9 @@ export default function DigestPage() {
               </span>
               <span className="t-mdp ink-3">week of {brief.weekStart}</span>
               {digest && <span className="t-md ink-4" style={{ marginLeft: 'auto' }}>generated {formatAgo(digest.generatedAt)} · {brief.postCount} posts</span>}
+              <span className="t-md ink-4" style={{ flexBasis: '100%' }}>
+                Delivered to your inbox weekly once email is set up (RESEND_API_KEY) — this page is the archive + on-demand send.
+              </span>
             </div>
 
             {brief.alerts.length > 0 && <AlertsBlock alerts={brief.alerts} />}
@@ -130,7 +167,7 @@ export default function DigestPage() {
               <Section title="Top opportunities">
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                   {brief.newOpportunities.map((o, i) => (
-                    <Link key={i} href={`/explore?topic=${encodeURIComponent(o.topic)}`} className="badge" style={{ background: 'var(--accent-soft)', color: 'var(--accent-text)' }} title={`${o.posts} posts · confirmed in ${o.confirmedSources.length} sources`}>
+                    <Link key={i} href={`/explore?topic=${encodeURIComponent(o.topic)}`} className="badge" style={{ background: 'var(--surface-2)', color: 'var(--ink-2)' }} title={`${o.posts} posts · confirmed in ${o.confirmedSources.length} sources`}>
                       {o.topic}
                       {o.advantage > 0 && <span className="tnum" style={{ opacity: 0.7 }}>&nbsp;{Math.round(o.advantage * 100)}</span>}
                     </Link>
@@ -168,7 +205,7 @@ export default function DigestPage() {
             )}
 
             {brief.freshLeads.length > 0 && (
-              <Section title="Fresh high-intent leads" hint={<Link href="/signals" className="accent-link" style={{ color: 'var(--accent-text)' }}>open Signals →</Link>}>
+              <Section title="Fresh high-intent leads" hint={<Link href="/today?view=signals" className="accent-link" style={{ color: 'var(--accent-text)' }}>open Signals →</Link>}>
                 <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 9 }}>
                   {brief.freshLeads.map((l, i) => (
                     <li key={i}>

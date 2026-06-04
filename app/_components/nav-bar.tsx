@@ -16,12 +16,14 @@ import { Icons, Spinner, type SimpleIconProps } from './icons'
 type NavLink = { href: string; label: string; icon: (p: SimpleIconProps) => React.ReactNode }
 type NavGroup = { label?: string; items: NavLink[]; collapsible?: boolean }
 
+// The reshaped skeleton: Home (what's happening) → Voice (what to say) →
+// Act (say it) → Discover, with everything else folded into Advanced + Settings.
 const NAV_GROUPS: NavGroup[] = [
   {
     items: [
-      { href: '/today', label: 'Today', icon: Icons.inbox },
-      { href: '/opportunities', label: 'Opportunities', icon: Icons.grid },
-      { href: '/pipeline', label: 'Pipeline', icon: Icons.flag },
+      { href: '/today', label: 'Home', icon: Icons.inbox },
+      { href: '/voice', label: 'Voice', icon: Icons.chat },
+      { href: '/pipeline', label: 'Act', icon: Icons.flag },
       { href: '/explore', label: 'Discover', icon: Icons.compass },
     ],
   },
@@ -30,9 +32,6 @@ const NAV_GROUPS: NavGroup[] = [
     collapsible: true,
     items: [
       { href: '/insights', label: 'Trends & Insights', icon: Icons.sparkles },
-      { href: '/customer-voice', label: 'Customer Voice', icon: Icons.chat },
-      { href: '/signals', label: 'Signal feed', icon: Icons.bolt },
-      { href: '/digest', label: 'Digest archive', icon: Icons.bell },
     ],
   },
 ]
@@ -94,10 +93,13 @@ export function NavBar() {
       <Link href="/" className="brand" style={{ textDecoration: 'none' }}>
         <div className="brand-mark" aria-hidden="true">
           <svg width="18" height="18" viewBox="0 0 256 256">
-            <circle cx="96" cy="170" r="15" fill="#0E0F13" />
-            <path d="M135,170 A39,39 0 0 0 96,131" fill="none" stroke="#0E0F13" strokeWidth="18" strokeLinecap="round" />
-            <path d="M167,170 A71,71 0 0 0 96,99" fill="none" stroke="#0E0F13" strokeWidth="18" strokeLinecap="round" />
-            <path d="M199,170 A103,103 0 0 0 96,67" fill="none" stroke="#0E0F13" strokeWidth="18" strokeLinecap="round" />
+            {/* Shift the burst to sit centered in the tile — matches app/icon.svg. */}
+            <g transform="translate(-16 6)">
+              <circle cx="96" cy="170" r="15" fill="#0E0F13" />
+              <path d="M135,170 A39,39 0 0 0 96,131" fill="none" stroke="#0E0F13" strokeWidth="18" strokeLinecap="round" />
+              <path d="M167,170 A71,71 0 0 0 96,99" fill="none" stroke="#0E0F13" strokeWidth="18" strokeLinecap="round" />
+              <path d="M199,170 A103,103 0 0 0 96,67" fill="none" stroke="#0E0F13" strokeWidth="18" strokeLinecap="round" />
+            </g>
           </svg>
         </div>
         <div className="brand-name">
@@ -156,10 +158,13 @@ export function NavBar() {
       })}
 
       <div className="side-sep" />
-      <Link href="/explore" className="side-sources" title="Manage sources in Discover">
-        <Icons.compass size={14} />
-        <span>{watchlist.length === 0 ? 'Add sources' : 'Sources'}</span>
-        {watchlist.length > 0 && <span className="side-sources-n tnum">{watchlist.length}</span>}
+      <Link
+        href="/settings"
+        className={`nav-item${isActive(pathname, '/settings') ? ' active' : ''}`}
+        aria-current={isActive(pathname, '/settings') ? 'page' : undefined}
+      >
+        <Icons.wrench />
+        Settings
       </Link>
 
       <div className="side-foot">

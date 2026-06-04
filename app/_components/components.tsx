@@ -37,20 +37,26 @@ export function Topbar({
   crumb,
   posts,
   children,
+  hideStats = true,
 }: {
   title: string
   crumb?: string
   posts: TaggedPost[]
   children?: ReactNode
+  /** Show the pain/feature/complaint counts. Off by default — it's dev
+   *  instrumentation, not founder value, and it clutters every header. */
+  hideStats?: boolean
 }) {
   const { openSidebar } = useSidebarCtx()
   let pain = 0
   let feature = 0
   let tool = 0
-  for (const p of posts) {
-    if (p.category === 'pain_point') pain++
-    else if (p.category === 'feature_request') feature++
-    else if (p.category === 'tool_complaint') tool++
+  if (!hideStats) {
+    for (const p of posts) {
+      if (p.category === 'pain_point') pain++
+      else if (p.category === 'feature_request') feature++
+      else if (p.category === 'tool_complaint') tool++
+    }
   }
   return (
     <div className="topbar">
@@ -65,15 +71,19 @@ export function Topbar({
       <h1>{title}</h1>
       {crumb && <span className="crumb">{crumb}</span>}
       <div className="topbar-stats">
-        <span className="tstat">
-          <b className="pain">{pain}</b> <span className="tstat-label">pain</span>
-        </span>
-        <span className="tstat">
-          <b className="feature">{feature}</b> <span className="tstat-label">features</span>
-        </span>
-        <span className="tstat">
-          <b className="tool">{tool}</b> <span className="tstat-label">complaints</span>
-        </span>
+        {!hideStats && (
+          <>
+            <span className="tstat">
+              <b className="pain">{pain}</b> <span className="tstat-label">pain</span>
+            </span>
+            <span className="tstat">
+              <b className="feature">{feature}</b> <span className="tstat-label">features</span>
+            </span>
+            <span className="tstat">
+              <b className="tool">{tool}</b> <span className="tstat-label">complaints</span>
+            </span>
+          </>
+        )}
         {children}
       </div>
     </div>
@@ -331,7 +341,7 @@ export function BulkDeepScanBar({ sub }: { sub?: string }) {
           </div>
           <button
             type="button"
-            className="btn btn-primary btn-sm"
+            className="btn btn-ghost btn-sm"
             onClick={() => scan.deepScanAllEligible(sub)}
             disabled={eligibleCount === 0}
           >
@@ -562,7 +572,7 @@ export function FirstRunGuide({
             <h3>Review opportunities &amp; buying intent</h3>
             <p>
               Top topics surface here. <a href="/insights">Insights</a> ranks
-              them with AI commentary; <a href="/signals">Signals</a> filters
+              them with AI commentary; <a href="/today?view=signals">Signals</a> filters
               for high-intent posts ready to engage.
             </p>
           </div>
@@ -2923,7 +2933,7 @@ export function SubSuggester() {
         </div>
         <button
           type="button"
-          className="btn btn-primary"
+          className="btn btn-ghost"
           onClick={handleSuggest}
           disabled={loading || input.trim().length < 2}
         >
@@ -3449,7 +3459,7 @@ export function PostCard({
             {post.topic && (
               <span
                 className="badge"
-                style={{ color: 'var(--accent-text)', background: 'var(--accent-soft)' }}
+                style={{ color: 'var(--ink-2)', background: 'var(--surface-2)' }}
               >
                 {post.topic}
               </span>

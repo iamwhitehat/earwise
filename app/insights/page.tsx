@@ -253,6 +253,11 @@ function TrendsOverTime({ topics }: { topics: string[] }) {
     }
   }, [topics])
 
+  const anyHistory = data ? topics.some((t) => (data[t]?.length ?? 0) >= 2) : false
+  // Don't show a wall of "collecting data" placeholders — hide the whole block
+  // until at least one topic has real week-over-week history to chart.
+  if (!loading && !error && (topics.length === 0 || !anyHistory)) return null
+
   return (
     <section className="section" style={{ marginBottom: 0 }}>
       <div className="section-head">

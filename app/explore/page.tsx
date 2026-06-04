@@ -1,6 +1,7 @@
 'use client'
 
 import { Suspense, useCallback, useEffect } from 'react'
+import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
   AllTimePostsView,
@@ -24,6 +25,14 @@ import {
 import { POSTS_PER_SCAN_OPTIONS, type PostsPerScan } from '@/lib/use-posts-per-scan'
 import { canonicalTopic } from '@/lib/topics'
 import { Icons, Spinner } from '../_components/icons'
+
+// Discover's four jobs split into one-focal tabs (?view=), like Pipeline/Voice.
+type View = 'sources' | 'trends' | 'posts'
+const VIEWS: { id: View; label: string }[] = [
+  { id: 'sources', label: 'Sources' },
+  { id: 'trends', label: 'Trends' },
+  { id: 'posts', label: 'Posts' },
+]
 
 function ExploreView() {
   const { watchlist, hydrated, addSubreddit, removeSubreddit } = useWatchlistCtx()
@@ -112,111 +121,135 @@ function ExploreView() {
     ? scan.posts.filter((p) => canonicalTopic(p.topic) === scan.selectedTopic)
     : scan.posts
 
+  const view: View =
+    sp.get('view') === 'trends' ? 'trends' : sp.get('view') === 'posts' ? 'posts' : 'sources'
+
   return (
     <>
-      <Topbar title="Discover" posts={scan.posts} />
+      <Topbar title="Discover" posts={scan.posts}>
+        <nav className="seg" aria-label="Discover view">
+          {VIEWS.map((v) => (
+            <Link
+              key={v.id}
+              href={`/explore?view=${v.id}`}
+              className={`seg-btn${view === v.id ? ' on' : ''}`}
+              aria-current={view === v.id ? 'page' : undefined}
+            >
+              {v.label}
+            </Link>
+          ))}
+        </nav>
+      </Topbar>
 
       <div className="content scroll">
-        <WatchlistEditor
-          watchlist={watchlist}
-          hydrated={hydrated}
-          onAdd={addSubreddit}
-          onRemove={removeSubreddit}
-          onScan={scan.scanAll}
-          onStop={scan.stopScan}
-          scanning={scan.anyStreaming}
-          postsPerScan={pps.postsPerScan}
-          postsPerScanOptions={POSTS_PER_SCAN_OPTIONS}
-          onChangePostsPerScan={(n) => pps.setPostsPerScan(n as PostsPerScan)}
-        />
+        {view === 'sources' && (
+          <>
+            <WatchlistEditor
+              watchlist={watchlist}
+              hydrated={hydrated}
+              onAdd={addSubreddit}
+              onRemove={removeSubreddit}
+              onScan={scan.scanAll}
+              onStop={scan.stopScan}
+              scanning={scan.anyStreaming}
+              postsPerScan={pps.postsPerScan}
+              postsPerScanOptions={POSTS_PER_SCAN_OPTIONS}
+              onChangePostsPerScan={(n) => pps.setPostsPerScan(n as PostsPerScan)}
+            />
 
-        <SubSuggester />
+            <SubSuggester />
 
-        <ErrorsBanner errors={scan.errors} />
-        {scan.anyStreaming && <ScanBanner buckets={scan.buckets} order={scan.order} />}
+            <ErrorsBanner errors={scan.errors} />
+            {scan.anyStreaming && <ScanBanner buckets={scan.buckets} order={scan.order} />}
 
-        <BulkDeepScanBar />
+            <BulkDeepScanBar />
 
-        {watchlist.length > 0 && (
-          <section className="section">
-            <div className="section-head">
-              <h2>Scanned subreddits</h2>
-            </div>
-            <ScannedSubreddits buckets={scan.buckets} order={scan.order} onLoadMore={scan.loadMore} />
-          </section>
+            {watchlist.length > 0 && (
+              <section className="section">
+                <div className="section-head">
+                  <h2>Scanned subreddits</h2>
+                </div>
+                <ScannedSubreddits buckets={scan.buckets} order={scan.order} onLoadMore={scan.loadMore} />
+              </section>
+            )}
+          </>
         )}
 
-        <div className="cols">
-          <TrendsPanel
-            scanTrends={scan.scanTrends}
-            posts={scan.posts}
-            selectedTopic={scan.selectedTopic}
-            onSelectTopic={applyTopic}
-            tab={scan.trendsTab}
-            onTabChange={applyTrendsTab}
-            allTimeTrends={scan.allTimeTrends}
-            allTimeLoading={scan.allTimeLoading}
-            allTimeError={scan.allTimeError}
-            selectedAllTimeTopic={scan.selectedAllTimeTopic}
-            onSelectAllTimeTopic={applyAllTimeTopic}
-          />
+        {view === 'trends' && (
+          <div className="cols">
+            <TrendsPanel
+              scanTrends={scan.scanTrends}
+              posts={scan.posts}
+              selectedTopic={scan.selectedTopic}
+              onSelectTopic={applyTopic}
+              tab={scan.trendsTab}
+              onTabChange={applyTrendsTab}
+              allTimeTrends={scan.allTimeTrends}
+              allTimeLoading={scan.allTimeLoading}
+              allTimeError={scan.allTimeError}
+              selectedAllTimeTopic={scan.selectedAllTimeTopic}
+              onSelectAllTimeTopic={applyAllTimeTopic}
+            />
 
-          <div style={{ position: 'sticky', top: 80 }}>
-            {scan.selectedAllTimeTopic ? null : scan.selectedTopic ? (
-              <TrendDetailPanel
-                topic={scan.selectedTopic}
-                posts={filteredPosts}
+            <div style={{ position: 'sticky', top: 80 }}>
+              {scan.selectedAllTimeTopic ? null : scan.selectedTopic ? (
+                <TrendDetailPanel
+                  topic={scan.selectedTopic}
+                  posts={filteredPosts}
+                  insight={scan.trendInsight}
+                  insightLoading={scan.trendInsightLoading}
+                  insightError={scan.trendInsightError}
+                  onClear={() => applyTopic(null)}
+                />
+              ) : (
+                <div className="card empty fade-in">
+                  <span className="e-ico">
+                    <Icons.compass size={26} />
+                  </span>
+                  <div>
+                    Select a trend to see its breakdown,
+                    <br />
+                    sentiment split, and AI insight.
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {view === 'posts' && (
+          <section className="section" style={{ marginBottom: 0 }}>
+            <div className="section-head">
+              <h2>
+                {scan.selectedAllTimeTopic
+                  ? `Posts · ${scan.selectedAllTimeTopic}`
+                  : scan.selectedTopic
+                  ? `Posts · ${scan.selectedTopic}`
+                  : 'All classified posts'}
+              </h2>
+              <span className="hint">
+                {scan.selectedAllTimeTopic
+                  ? scan.allTimeTopicPosts?.length ?? 0
+                  : filteredPosts.length}{' '}
+                posts
+              </span>
+            </div>
+            {scan.selectedAllTimeTopic ? (
+              <AllTimePostsView
+                topic={scan.selectedAllTimeTopic}
+                posts={scan.allTimeTopicPosts}
+                loading={scan.allTimeTopicLoading}
+                error={scan.allTimeTopicError}
+                onClear={() => applyAllTimeTopic(null)}
                 insight={scan.trendInsight}
                 insightLoading={scan.trendInsightLoading}
                 insightError={scan.trendInsightError}
-                onClear={() => applyTopic(null)}
               />
             ) : (
-              <div className="card empty fade-in">
-                <span className="e-ico">
-                  <Icons.compass size={26} />
-                </span>
-                <div>
-                  Select a trend to see its breakdown,
-                  <br />
-                  sentiment split, and AI insight.
-                </div>
-              </div>
+              <CategoryGroups posts={filteredPosts} />
             )}
-          </div>
-        </div>
-
-        <section className="section" style={{ marginTop: 30 }}>
-          <div className="section-head">
-            <h2>
-              {scan.selectedAllTimeTopic
-                ? `Posts · ${scan.selectedAllTimeTopic}`
-                : scan.selectedTopic
-                ? `Posts · ${scan.selectedTopic}`
-                : 'All Classified Posts'}
-            </h2>
-            <span className="hint">
-              {scan.selectedAllTimeTopic
-                ? scan.allTimeTopicPosts?.length ?? 0
-                : filteredPosts.length}{' '}
-              posts
-            </span>
-          </div>
-          {scan.selectedAllTimeTopic ? (
-            <AllTimePostsView
-              topic={scan.selectedAllTimeTopic}
-              posts={scan.allTimeTopicPosts}
-              loading={scan.allTimeTopicLoading}
-              error={scan.allTimeTopicError}
-              onClear={() => applyAllTimeTopic(null)}
-              insight={scan.trendInsight}
-              insightLoading={scan.trendInsightLoading}
-              insightError={scan.trendInsightError}
-            />
-          ) : (
-            <CategoryGroups posts={filteredPosts} />
-          )}
-        </section>
+          </section>
+        )}
       </div>
     </>
   )

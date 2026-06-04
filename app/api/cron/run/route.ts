@@ -22,6 +22,11 @@ const MAX_QUERIES = 20
 const HOT_WINDOW_MS = 24 * 60 * 60 * 1000
 const HOT_ALERT_CAP = 5
 
+// The full pipeline (ingest + synthesis + digest + email) runs for minutes —
+// well past the default function timeout. Vercel Pro honors up to 300s; Hobby
+// hard-caps at 60s (see DEPLOY.md) and this job will not finish there.
+export const maxDuration = 300
+
 function strList(v: unknown): string[] {
   return Array.isArray(v)
     ? v.filter((x): x is string => typeof x === 'string').map((x) => x.trim()).filter(Boolean).slice(0, MAX_QUERIES)
@@ -194,4 +199,13 @@ export async function POST(req: NextRequest) {
   }
 
   return Response.json({ ok: true, ...summary })
+}
+
+// Vercel Cron issues GET requests (this job is POST so it can carry a source
+// config + stay auth-gated). Delegate so a Vercel cron trigger works out of the
+// box: with no body the digest builds from current data without a new scan. To
+// scan specific sources on a schedule, use an external scheduler that POSTs a
+// body (see SETUP.md / DEPLOY.md). Auth (CRON_SECRET) is enforced inside POST.
+export async function GET(req: NextRequest) {
+  return POST(req)
 }

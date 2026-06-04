@@ -14,6 +14,20 @@ import {
   cleanOpenerText,
   type OpenerInput,
 } from './opener'
+import {
+  PERSONA_SYSTEM_PROMPT,
+  DRAFT_TEMPERATURE,
+  pickShape,
+  selectVoiceSamples,
+  renderShapeDirective,
+  renderVoiceAnchor,
+} from './voice'
+import {
+  buildVoiceInput,
+  normalizeVoiceBrief,
+  renderVoiceBriefAnchor,
+  type VoiceBrief,
+} from './voice-brief'
 import type {
   InsightV2,
   InsightEvidence,
@@ -155,6 +169,17 @@ export async function callStructured<T = unknown>(
         messages: [{ role: 'user', content: user }],
       })
     )
+    // When the model hits the token ceiling mid tool-call, the API returns a
+    // truncated tool_use whose `input` is an empty/partial object — the caller's
+    // normalizer then yields nothing and the user sees a confusing "returned no
+    // results". Surface it loudly so it's diagnosable, and so callers can raise
+    // max_tokens rather than chase a phantom prompt bug.
+    if (msg.stop_reason === 'max_tokens') {
+      console.warn(
+        `[claude] callStructured(${tool.name}) hit max_tokens (${maxTokens}); ` +
+        `tool output was truncated — raise max_tokens for this call.`
+      )
+    }
     for (const block of msg.content) {
       if (block.type === 'tool_use' && block.name === tool.name) {
         return block.input as T
@@ -718,6 +743,13 @@ function normalizeInsightsV2(raw: unknown): InsightV2[] {
   return out
 }
 
+// One full insight (title/audience/problem/demand/momentum/whatToBuild/whyNow +
+// 2-4 cited quotes + sources) runs ~500-700 output tokens; the aggregator feeds
+// up to 8 opportunities (TOP_OPPORTUNITIES). 4000 left no headroom — a normal
+// 8-opportunity refresh truncated at the ceiling, returning an empty tool call
+// and the misleading "Claude returned no insights". 8000 fits 8 comfortably.
+const INSIGHTS_DRAFT_MAX_TOKENS = 8000
+
 /**
  * Insights v2: synthesize one cited, decision-grade insight per opportunity,
  * then run a critique pass that drops weak/hallucinated insights and
@@ -734,7 +766,7 @@ export async function synthesizeInsightsV2(
     INSIGHTS_V2_SYSTEM_PROMPT,
     user,
     INSIGHT_V2_TOOL,
-    4000,
+    INSIGHTS_DRAFT_MAX_TOKENS,
   )
   const drafts = normalizeInsightsV2(draftInput)
   if (drafts.length === 0) return []
@@ -1081,6 +1113,75 @@ export async function synthesizeMessaging(
   return normalizeMessaging(input)
 }
 
+// ─── Voice engine: positioning + angles + copy, in the buyers' own words ──────
+// The headline distillation: one positioning line, the angles that land, and a
+// few paste-ready snippets — all grounded in verbatim Voice-of-Customer quotes
+// and the founder's profile. Prompt assembly + normalization live in
+// lib/voice-brief.ts so they stay unit-testable.
+
+const VOICE_BRIEF_SYSTEM_PROMPT = `You are a positioning strategist for a single founder. You receive how their buyers actually talk (recurring phrases, emotional words, tools, and a pool of VERBATIM quotes) plus the founder's profile. Distill it into the sharpest way for THIS founder to talk about their product — in the buyers' own language.
+
+Produce:
+- positioningLine: ONE crisp sentence, UNDER 30 WORDS — what they are, for whom, against what status quo. Tight and opinionated; if it starts to run long, cut it. Not a slogan, not hype, no run-ons.
+- angles: 3-5 distinct framings that would land with these buyers. Each: the angle, why it lands (one line), and 2-3 exactWords — verbatim phrases pulled from the supplied quotes.
+- snippets: 3-5 paste-ready pieces of copy, each labeled (e.g. "one-liner", "elevator", "cold opener", "landing subhead"). Each carries the verbatim source quotes it draws from.
+
+Rules:
+- Every exactWords entry and every snippet "sources" entry must be VERBATIM from the supplied quote pool — never invent language.
+- Mirror the buyers' wording. No hype, no emojis, no markdown, no buzzwords.
+- If the data is thin for a field, return fewer items rather than inventing.`
+
+const VOICE_BRIEF_TOOL: StructuredTool = {
+  name: 'report_voice_brief',
+  description: "Return the founder's positioning, resonant angles, and paste-ready copy, grounded in verbatim buyer quotes.",
+  input_schema: {
+    type: 'object',
+    properties: {
+      positioningLine: { type: 'string' },
+      angles: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            angle: { type: 'string' },
+            whyItLands: { type: 'string' },
+            exactWords: { type: 'array', items: { type: 'string' } },
+          },
+          required: ['angle', 'whyItLands', 'exactWords'],
+        },
+      },
+      snippets: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            label: { type: 'string' },
+            text: { type: 'string' },
+            sources: { type: 'array', items: { type: 'string' } },
+          },
+          required: ['label', 'text', 'sources'],
+        },
+      },
+    },
+    required: ['positioningLine', 'angles', 'snippets'],
+  },
+}
+
+/** Distill a VoC block + founder profile into a positioning line + angles + copy.
+ *  Returns null when the model produced nothing usable. */
+export async function synthesizeVoiceBrief(
+  vocText: string,
+  profileText: string,
+  model: string = SYNTH_MODELS[DEFAULT_SYNTH_TIER],
+  memoryDigest = '',
+): Promise<VoiceBrief | null> {
+  if (!vocText.trim()) return null
+  const base = buildVoiceInput({ vocText, profileText })
+  const user = memoryDigest ? `${memoryDigest}\n\n${base}` : base
+  const input = await callStructured(model, VOICE_BRIEF_SYSTEM_PROMPT, user, VOICE_BRIEF_TOOL, 2500)
+  return normalizeVoiceBrief(input)
+}
+
 // ─── Guided strategist ───────────────────────────────────────────────────────
 
 const STRATEGY_SYSTEM_PROMPT = `You are a pragmatic go-to-market strategist advising a specific founder, using real market intelligence from the subreddits they watch.
@@ -1248,22 +1349,9 @@ export async function synthesizeWeeklyMoves(
 
 // ─── Draft reply to a high-intent signal ─────────────────────────────────────
 
-const DRAFT_REPLY_SYSTEM_PROMPT = `You write helpful, non-spammy replies to Reddit posts and comments.
-Goal: be useful first, never lead with a product pitch.
-
-Structure your reply:
-1. Acknowledge their specific problem in one sentence (mirror their language).
-2. Share an angle that's worked — describe an approach, not a brand.
-3. End with a clarifying question OR an offer to share more.
-
-Rules:
-- Plain Reddit-style prose, no markdown headers.
-- Under 100 words.
-- Never recommend a specific product by name unless the user asked for one.
-- Don't sound like a sales pitch.
-- No emojis.
-
-Output ONLY the reply text. No preamble, no quotes, no commentary.`
+// Same voice as the Leads opener — a real person, not a marketer. Rules live in
+// lib/voice.ts so the opener and the reply can never drift apart.
+const DRAFT_REPLY_SYSTEM_PROMPT = PERSONA_SYSTEM_PROMPT
 
 export async function draftSignalReply(opts: {
   subreddit: string
@@ -1273,9 +1361,18 @@ export async function draftSignalReply(opts: {
   intentType?: string
   /** Learned "what's working" guidance (which angles convert), if available. */
   guidance?: string | null
+  /** The founder's own replies, as a voice anchor (loaded in the route). */
+  voiceSamples?: string[]
+  /** The founder's distilled positioning, to keep the angle consistent (loaded in the route). */
+  voiceBrief?: VoiceBrief | null
 }): Promise<string | null> {
   const text = opts.text.trim().slice(0, 2000)
   if (!text) return null
+
+  // Fresh shape + voice anchor per draft so replies vary, never a template.
+  const shape = pickShape(text)
+  const voiceAnchor = renderVoiceAnchor(selectVoiceSamples(opts.voiceSamples))
+  const briefAnchor = renderVoiceBriefAnchor(opts.voiceBrief)
 
   const userContent =
     `Subreddit: r/${opts.subreddit}\n` +
@@ -1283,14 +1380,18 @@ export async function draftSignalReply(opts: {
     (opts.topic ? `Topic: ${opts.topic}\n` : '') +
     (opts.intentType ? `Intent signal: ${opts.intentType}\n` : '') +
     (opts.guidance ? `What has converted before (lean into this angle): ${opts.guidance.trim()}\n` : '') +
-    `\n--- Their post/comment ---\n${text}\n--- end ---\n\n` +
-    `Draft a helpful Reddit reply that addresses their actual problem. Lead with their pain, not a pitch.`
+    (briefAnchor ? `\n${briefAnchor}\n` : '') +
+    `\n--- Their post/comment ---\n${text}\n--- end ---\n` +
+    (voiceAnchor ? `\n${voiceAnchor}\n` : '') +
+    `\n${renderShapeDirective(shape)}\n` +
+    `\nWrite your reply to u/${opts.author || 'them'}.`
 
   try {
     const msg = await callClaude(() =>
       getClient().messages.create({
         model: MODEL_BULK,
         max_tokens: 400,
+        temperature: DRAFT_TEMPERATURE,
         system: DRAFT_REPLY_SYSTEM_PROMPT,
         messages: [{ role: 'user', content: userContent }],
       })
@@ -1315,13 +1416,17 @@ export async function draftOpener(opts: OpenerInput): Promise<string | null> {
   const excerpt = (opts.excerpt ?? '').trim()
   if (!excerpt) return null
 
-  const userContent = buildOpenerUserContent(opts)
+  // Fresh shape + voice anchor per draft so openers vary, never a template.
+  const shape = pickShape(excerpt)
+  const voiceSamples = selectVoiceSamples(opts.voiceSamples)
+  const userContent = buildOpenerUserContent(opts, { shape, voiceSamples })
 
   try {
     const msg = await callClaude(() =>
       getClient().messages.create({
         model: MODEL_BULK,
         max_tokens: 400,
+        temperature: DRAFT_TEMPERATURE,
         system: OPENER_SYSTEM_PROMPT,
         messages: [{ role: 'user', content: userContent }],
       })

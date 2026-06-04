@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Icons, Spinner } from './icons'
 import { SynthModelSelect } from './components'
+import { VoiceSamples } from './voice-samples'
 import { useSynthModel } from '@/lib/use-synth-model'
 import {
   EMPTY_PROFILE,
@@ -174,6 +175,8 @@ export function PlanView() {
           </div>
         </section>
 
+        <VoiceSamples />
+
         {(running || steps.length > 0) && !run && (
           <section className="section" style={{ marginTop: 'var(--gap)', marginBottom: 0 }}>
             <div className="card" style={{ padding: 'var(--pad)' }}>
@@ -250,23 +253,24 @@ function BriefView({ run }: { run: StrategyRun }) {
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {b.positioning && (
-          <Block title="Positioning" copyText={b.positioning}>
-            <p className="guide-p">{b.positioning}</p>
-          </Block>
-        )}
+        {/* Positioning + messaging now live in Voice — one source of truth,
+            grounded in real buyer language. Plan keeps the GTM plan below. */}
+        <Link
+          href="/voice"
+          className="card"
+          style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', textDecoration: 'none', color: 'var(--ink-2)', fontSize: 13 }}
+        >
+          <Icons.chat size={15} />
+          <span>
+            <strong style={{ color: 'var(--ink)' }}>Positioning &amp; messaging</strong> live in Voice — your
+            positioning line, the angles that land, and copy in your buyers&apos; words.
+          </span>
+          <span style={{ marginLeft: 'auto', flexShrink: 0, display: 'inline-flex' }}><Icons.chev size={14} /></span>
+        </Link>
 
         {b.icp && (
           <Block title="Ideal customer to start with" copyText={b.icp}>
             <p className="guide-p">{b.icp}</p>
-          </Block>
-        )}
-
-        {b.messaging.length > 0 && (
-          <Block title="Key messages" copyText={b.messaging.join('\n')}>
-            <ul className="guide-ul">
-              {b.messaging.map((m, i) => <li key={i}>{m}</li>)}
-            </ul>
           </Block>
         )}
 
@@ -319,13 +323,13 @@ function BriefView({ run }: { run: StrategyRun }) {
                   key={i}
                   href={`/explore?topic=${encodeURIComponent(t)}`}
                   className="badge"
-                  style={{ background: 'var(--accent-soft)', color: 'var(--accent-text)' }}
+                  style={{ background: 'var(--surface-2)', color: 'var(--ink-2)' }}
                 >
                   {t}
                 </Link>
               ))}
             </div>
-            <Link href="/signals" className="btn btn-primary btn-sm">
+            <Link href="/today?view=signals" className="btn btn-primary btn-sm">
               <Icons.bolt size={13} /> Find warm leads in Signals
             </Link>
           </Block>

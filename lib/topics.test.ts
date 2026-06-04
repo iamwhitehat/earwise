@@ -26,6 +26,23 @@ describe('singularizeWord', () => {
     expect(singularizeWord('analytics')).toBe('analytics')
     expect(singularizeWord('aws')).toBe('aws')
   })
+  it('does not strip the trailing s from singular -us/-is words or false plurals', () => {
+    expect(singularizeWord('chaos')).toBe('chaos')
+    expect(singularizeWord('antivirus')).toBe('antivirus')
+    expect(singularizeWord('virus')).toBe('virus')
+    expect(singularizeWord('analysis')).toBe('analysis')
+    expect(singularizeWord('focus')).toBe('focus')
+    expect(singularizeWord('series')).toBe('series')
+    // genuine plurals still singularize
+    expect(singularizeWord('teams')).toBe('team')
+  })
+})
+
+describe('canonicalTopicLabel (no mangling)', () => {
+  it('keeps singular -s words intact in multi-word topics', () => {
+    expect(canonicalTopicLabel('operational chaos small teams')).toBe('operational chaos small team')
+    expect(canonicalTopicLabel('antivirus market positioning')).toBe('antivirus market positioning')
+  })
 })
 
 describe('canonicalTopicLabel', () => {

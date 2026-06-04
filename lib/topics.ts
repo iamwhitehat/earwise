@@ -62,6 +62,13 @@ const SINGULAR_EXCEPTIONS = new Set([
   'status',
   'business',
   'access',
+  // Singular words ending in 's' that the bare-'s' rule would mangle.
+  'chaos',
+  'kudos',
+  'lens',
+  'news',
+  'series',
+  'species',
 ])
 
 /**
@@ -75,6 +82,9 @@ export function singularizeWord(word: string): string {
   if (word.length <= 3) return word
   if (word === 'apis') return 'api'
   if (SINGULAR_EXCEPTIONS.has(word)) return word
+  // Words ending in 'us'/'is' are almost never English plurals (virus,
+  // antivirus, analysis, basis, focus, bonus, campus) — leave them whole.
+  if (/(us|is)$/.test(word)) return word
   if (word.endsWith('ies')) return `${word.slice(0, -3)}y`
   if (/(ses|xes|zes|ches|shes)$/.test(word)) return word.slice(0, -2)
   if (word.endsWith('ss')) return word // address, process

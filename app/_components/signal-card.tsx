@@ -179,7 +179,7 @@ export function SignalCard({
         {signal.topic && (
           <span
             className="badge"
-            style={{ color: 'var(--accent-text)', background: 'var(--accent-soft)' }}
+            style={{ color: 'var(--ink-2)', background: 'var(--surface-2)' }}
           >
             {signal.topic}
           </span>
