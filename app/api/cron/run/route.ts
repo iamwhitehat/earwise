@@ -15,6 +15,7 @@ import { WHATS_WORKING_PREFIX } from '@/lib/recalibrate'
 import { buildDigest } from '@/lib/digest'
 import { sendDigestEmail, sendPlainEmail, isEmailConfigured } from '@/lib/email'
 import { loadHotSignals } from '@/lib/hot-signals-db'
+import { isFreshEnoughToReply } from '@/lib/hot-signals'
 import { selectNewHotAlerts, hotSignalAlert } from '@/lib/alerts'
 import { DEFAULT_PROJECT } from '@/lib/memory'
 
@@ -124,14 +125,17 @@ export async function POST(req: NextRequest) {
   //     (batched, capped, deduped via `events` rows of kind 'hot_alert'). The
   //     faster this job runs, the closer to real-time the alerting is.
   try {
-    const hot = await loadHotSignals(db, { windowMs: HOT_WINDOW_MS, projectId: DEFAULT_PROJECT, limit: 50 })
+    const { signals: hot } = await loadHotSignals(db, { windowMs: HOT_WINDOW_MS, projectId: DEFAULT_PROJECT, limit: 50 })
     const prior = await db.from('events').select('entity_id').eq('kind', 'hot_alert').limit(2000)
     if (prior.error) {
       // Can't dedupe without the events table → skip alerting to avoid re-spam.
       summary.hotAlertSkipped = 'events table absent'
     } else {
       const alreadyAlerted = new Set((prior.data ?? []).map((r) => r.entity_id as string))
-      const fresh = selectNewHotAlerts(hot, alreadyAlerted, HOT_ALERT_CAP)
+      // Age gate: never alert on a thread already past its reply window (~48h),
+      // however high it scores — a hot score on a dead thread is a false alarm.
+      const replyable = hot.filter((s) => isFreshEnoughToReply(s))
+      const fresh = selectNewHotAlerts(replyable, alreadyAlerted, HOT_ALERT_CAP)
       summary.hotSignalAlerts = fresh.length
       if (fresh.length > 0) {
         await db.from('events').insert(

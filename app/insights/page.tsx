@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { Icons, Spinner } from '../_components/icons'
 import { useScanCtx } from '../_components/scan-provider'
 import { DirectionBadge, StalenessBanner, SynthModelSelect, Topbar } from '../_components/components'
@@ -475,6 +476,17 @@ function InsightCardV2({ insight, index }: { insight: InsightV2; index: number }
           )}
         </div>
       </div>
+
+      {insight.topics && insight.topics.length > 0 && (
+        <div style={{ marginTop: 14 }}>
+          <Link
+            href={`/today?view=signals&age=all&topic=${encodeURIComponent(insight.topics[0])}`}
+            className="btn btn-primary btn-sm"
+          >
+            <Icons.bolt size={13} /> Find the buyers →
+          </Link>
+        </div>
+      )}
 
       {insight.evidence.length > 0 && (
         <div style={{ marginTop: 14 }}>

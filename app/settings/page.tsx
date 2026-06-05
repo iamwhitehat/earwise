@@ -7,6 +7,7 @@ import { Topbar } from '../_components/components'
 import { useScanCtx } from '../_components/scan-provider'
 import { VoiceSamples } from '../_components/voice-samples'
 import { BusinessProfileForm } from '../_components/business-profile-form'
+import { NicheField } from '../_components/niche-field'
 import { Icons } from '../_components/icons'
 
 // Settings — configure once, get out of the way. Business profile + voice
@@ -40,7 +41,14 @@ function SettingsInner() {
       </Topbar>
 
       <div className="content scroll">
-        {view === 'business' ? <BusinessProfileForm /> : <VoiceSamples />}
+        {view === 'business' ? (
+          <>
+            <NicheField />
+            <BusinessProfileForm />
+          </>
+        ) : (
+          <VoiceSamples />
+        )}
 
         <div className="card" style={{ padding: '12px 16px', marginTop: 'var(--gap)', display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--ink-3)' }}>
           <Icons.compass size={14} />

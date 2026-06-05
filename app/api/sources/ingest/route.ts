@@ -1,5 +1,7 @@
 import type { NextRequest } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
+import { activeProjectId } from '@/lib/project-server'
+import { gateUsage } from '@/lib/usage-credits-db'
 import { ingestSources, type IngestQueries } from '@/lib/sources/ingest'
 
 const MAX_QUERIES = 20
@@ -48,6 +50,13 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     )
   }
+
+  // Usage-credit gate (margin guard) — ingest classifies new signals via Haiku.
+  // Charge per classify-batch; new signals are capped at MAX_NEW_PER_RUN (60) =
+  // ~8 batches, so cap the up-front estimate at 8.
+  const units = Math.min(8, total)
+  const over = await gateUsage(db, await activeProjectId(), 'scan', { units })
+  if (over) return over
 
   try {
     const result = await ingestSources(db, queries, { signal: req.signal })

@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Icons, Spinner } from './icons'
 import { SynthModelSelect } from './components'
-import { VoiceSamples } from './voice-samples'
 import { useSynthModel } from '@/lib/use-synth-model'
 import {
   EMPTY_PROFILE,
@@ -22,18 +21,6 @@ type StrategyRun = {
 }
 
 type Step = { key: string; label: string; status: 'running' | 'done' }
-
-const FIELDS: Array<{ key: keyof BusinessProfile; label: string; placeholder: string; long?: boolean }> = [
-  { key: 'product', label: 'Product', placeholder: 'What are you building?' },
-  { key: 'valueProp', label: 'Value proposition', placeholder: 'The one-line promise', long: true },
-  { key: 'icp', label: 'Ideal customer', placeholder: 'Who is it for?' },
-  { key: 'stage', label: 'Stage', placeholder: 'idea / building / launched / scaling' },
-  { key: 'primaryGoal', label: 'Primary goal', placeholder: 'e.g. first 10 customers' },
-  { key: 'skills', label: 'Your skills / assets', placeholder: 'e.g. strong at content, ex-Stripe' },
-  { key: 'channels', label: 'Distribution channels', placeholder: 'e.g. Twitter, cold email, a 5k newsletter' },
-  { key: 'constraints', label: 'Constraints', placeholder: 'e.g. solo, no ad budget, nights+weekends' },
-  { key: 'url', label: 'URL', placeholder: 'https://…' },
-]
 
 export function PlanView() {
   const { tier, setTier } = useSynthModel()
@@ -59,10 +46,6 @@ export function PlanView() {
       cancelled = true
     }
   }, [])
-
-  function setField(key: keyof BusinessProfile, value: string) {
-    setProfile((p) => ({ ...p, [key]: value }))
-  }
 
   async function handleRun() {
     if (running) return
@@ -122,7 +105,7 @@ export function PlanView() {
     <>
       <div className="pipe-actions" style={{ gap: 10 }}>
         <SynthModelSelect value={tier} onChange={setTier} disabled={running} />
-        <button type="button" className="btn btn-primary btn-sm" onClick={handleRun} disabled={running}>
+        <button type="button" className="btn btn-primary btn-sm" onClick={handleRun} disabled={running || !loaded}>
           {running ? (
             <>
               <Spinner size={13} /> Running…
@@ -152,30 +135,15 @@ export function PlanView() {
           </div>
         )}
 
-        <section className="section" style={{ marginBottom: 0 }}>
-          <div className="section-head">
-            <h2>Your business</h2>
-            <span className="hint">grounds the plan — saved on run</span>
-          </div>
-          <div className="card" style={{ padding: 'var(--pad)' }}>
-            <div className="guide-form">
-              {FIELDS.map((f) => (
-                <label key={f.key} className={`guide-field${f.long ? ' guide-field-wide' : ''}`}>
-                  <span>{f.label}</span>
-                  <input
-                    type="text"
-                    value={profile[f.key]}
-                    placeholder={f.placeholder}
-                    onChange={(e) => setField(f.key, e.target.value)}
-                    disabled={!loaded || running}
-                  />
-                </label>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        <VoiceSamples />
+        <div
+          className="card"
+          style={{ padding: '12px 16px', marginBottom: 'var(--gap)', display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--ink-3)' }}
+        >
+          <Icons.wrench size={14} />
+          <span>The strategist grounds on your business profile + voice — edit them in </span>
+          <Link href="/settings" style={{ color: 'var(--accent-text)', textDecoration: 'underline' }}>Settings</Link>
+          <span>.</span>
+        </div>
 
         {(running || steps.length > 0) && !run && (
           <section className="section" style={{ marginTop: 'var(--gap)', marginBottom: 0 }}>

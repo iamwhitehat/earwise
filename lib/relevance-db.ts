@@ -28,6 +28,28 @@ const RELEVANCE_CAP = 80
 const EMBED_TEXT_CAP = 600
 const FULLY_RELEVANT: Relevance = { score: 1, reason: 'not screened' }
 
+// In-process verdict cache: every hot-signals / leads load was re-running the
+// relevance classification (a Haiku call) on the SAME signals — pure token waste.
+// Cache a real screened verdict per (niche, signal) so repeat loads reuse it.
+// Keyed by a niche hash so changing the niche invalidates. In-memory (per server
+// process) — great for the dev server + warm serverless instances; a DB-backed
+// cache would make it durable across cold starts.
+const VERDICT_TTL_MS = 30 * 60_000
+const VERDICT_CACHE_CAP = 5000
+const VERDICT_CACHE = new Map<string, { rel: Relevance; at: number }>()
+function hashNiche(s: string): string {
+  let h = 0
+  for (let i = 0; i < s.length; i++) h = (Math.imul(h, 31) + s.charCodeAt(i)) | 0
+  return String(h >>> 0)
+}
+function cacheVerdict(key: string, rel: Relevance, at: number): void {
+  if (VERDICT_CACHE.size >= VERDICT_CACHE_CAP) {
+    const oldest = VERDICT_CACHE.keys().next().value
+    if (oldest !== undefined) VERDICT_CACHE.delete(oldest)
+  }
+  VERDICT_CACHE.set(key, { rel, at })
+}
+
 export const keyOf = (s: Pick<SignalRow, 'kind' | 'id'>): string => `${s.kind}:${s.id}`
 
 /** Qualifying relevance threshold τ (env-tunable RELEVANCE_TAU, default 0.6).
@@ -139,7 +161,7 @@ async function viaEmbeddings(
       continue
     }
     const cos = cosineSimilarity(nicheVec, v)
-    out.set(keyOf(s), { score: relevanceFromCosine(cos), reason: `niche match ${Math.round(cos * 100)}%` })
+    out.set(keyOf(s), { score: relevanceFromCosine(cos), reason: `niche match ${Math.round(cos * 100)}%`, screened: true })
   }
   return out
 }
@@ -152,7 +174,7 @@ async function viaHaiku(nicheText: string, batch: SignalRow[]): Promise<Map<stri
     const r = results[i]
     out.set(
       keyOf(s),
-      r ? { score: relevanceFromVerdict(r.relevant), reason: r.reason || 'screened' } : FULLY_RELEVANT,
+      r ? { score: relevanceFromVerdict(r.relevant), reason: r.reason || 'screened', screened: true } : FULLY_RELEVANT,
     )
   })
   return out
@@ -178,25 +200,45 @@ export async function loadRelevance(
     return out
   }
 
+  const nk = hashNiche(nicheText)
+  const now = Date.now()
   const batch = signals.slice(0, RELEVANCE_CAP)
-  let scored: Map<string, Relevance> | null = null
-  if (isEmbeddingsConfigured()) {
-    try {
-      scored = await viaEmbeddings(db, nicheText, batch)
-    } catch (err) {
-      console.warn('[relevance] embeddings path failed:', err)
-      scored = null
-    }
+
+  // Serve fresh cached verdicts; only classify the cache misses.
+  const toScore: SignalRow[] = []
+  for (const s of batch) {
+    const hit = VERDICT_CACHE.get(`${nk}:${keyOf(s)}`)
+    if (hit && now - hit.at < VERDICT_TTL_MS) out.set(keyOf(s), hit.rel)
+    else toScore.push(s)
   }
-  if (!scored) {
-    try {
-      scored = await viaHaiku(nicheText, batch)
-    } catch (err) {
-      console.warn('[relevance] haiku path failed:', err)
-      scored = new Map()
+
+  if (toScore.length > 0) {
+    let scored: Map<string, Relevance> | null = null
+    if (isEmbeddingsConfigured()) {
+      try {
+        scored = await viaEmbeddings(db, nicheText, toScore)
+      } catch (err) {
+        console.warn('[relevance] embeddings path failed:', err)
+        scored = null
+      }
+    }
+    if (!scored) {
+      try {
+        scored = await viaHaiku(nicheText, toScore)
+      } catch (err) {
+        console.warn('[relevance] haiku path failed:', err)
+        scored = new Map()
+      }
+    }
+    for (const s of toScore) {
+      const rel = scored.get(keyOf(s)) ?? FULLY_RELEVANT
+      out.set(keyOf(s), rel)
+      // Only cache a real screened verdict — never the degraded fallback.
+      if (rel.screened) cacheVerdict(`${nk}:${keyOf(s)}`, rel, now)
     }
   }
 
-  for (const s of signals) out.set(keyOf(s), scored.get(keyOf(s)) ?? FULLY_RELEVANT)
+  // Over-cap signals were never scored → treat as relevant (don't hide a lead).
+  for (const s of signals) if (!out.has(keyOf(s))) out.set(keyOf(s), FULLY_RELEVANT)
   return out
 }

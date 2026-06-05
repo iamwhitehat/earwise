@@ -1,5 +1,7 @@
 import type { NextRequest } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
+import { activeProjectId } from '@/lib/project-server'
+import { gateUsage } from '@/lib/usage-credits-db'
 import { extractBuyerLanguage, synthesizeMessaging, resolveSynthModel } from '@/lib/claude'
 import {
   aggregateBuyerLanguageSamples,
@@ -31,6 +33,10 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     )
   }
+
+  // Usage-credit gate (margin guard) — tier-scaled (Opus ≈ 5× Sonnet).
+  const over = await gateUsage(db, await activeProjectId(), 'buyerLanguage', { tier })
+  if (over) return over
 
   let aggregated
   try {

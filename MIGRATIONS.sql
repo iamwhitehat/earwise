@@ -8,7 +8,8 @@ create table if not exists buyer_language (
   tools        jsonb not null,
   emotional    jsonb not null,
   stats        jsonb not null,
-  generated_at timestamptz not null default now()
+  
+    generated_at timestamptz not null default now()
 );
 create index if not exists buyer_language_generated_at_idx
   on buyer_language (generated_at desc);
@@ -254,3 +255,19 @@ create table if not exists voice_brief (
 );
 create index if not exists voice_brief_project_idx
   on voice_brief (project_id, generated_at desc);
+
+-- Public instant-scan funnel (/api/public/scan): durable per-IP + global daily
+-- rate limit. The `__global__` row is a distributed-abuse backstop.
+create table if not exists ip_rate_limits (
+  ip        text primary key,
+  count     int  not null default 0,
+  reset_at  timestamptz not null default (now() + interval '1 day')
+);
+
+-- Per-workspace usage-credit budget (the gross-margin guard). Cost-bearing
+-- routes charge credits (≈ Claude COGS) before spending; over-budget → 402.
+create table if not exists project_usage (
+  project_id   text primary key,
+  credits_used int  not null default 0,
+  reset_at     timestamptz not null default (now() + interval '30 days')
+);

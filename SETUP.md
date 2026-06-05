@@ -26,6 +26,30 @@ the default. Bulk classification always uses Haiku regardless.
 
 ---
 
+## 1a. (Optional) Scan speed vs. rate limit
+
+Bulk classification is **batched** — one Claude call labels ~8 posts at once
+(category + topic together) — and gated by a single **priority-aware rate
+limiter** (`lib/rate-limiter.ts`) so the app stays under your Anthropic rate
+limit. `CLAUDE_MIN_GAP_MS` is the minimum gap between call *starts*:
+
+```
+# default 1500 (≈ 40 calls/min, safe on the entry tier)
+CLAUDE_MIN_GAP_MS=600       # ≈ 100/min — faster scans on a higher-tier key
+CLAUDE_MAX_CONCURRENCY=2    # max calls in flight (default 2, range 1–8)
+```
+
+Lower gap = faster scans; too low for your tier just triggers 429 backoffs (the
+limiter pauses 60s and retries). `0` disables the gap entirely.
+
+The limiter is **priority-aware**: a foreground action you're waiting on — like
+**Load more** — jumps ahead of background bulk work (a big deep-scan, cron
+ingest), so a click never queues behind hundreds of throttled calls.
+`CLAUDE_MAX_CONCURRENCY` (default 2) lets such a click overlap a slow in-flight
+call without raising the overall start rate. Leave both unset for safe defaults.
+
+---
+
 ## 1b. (Optional) Embeddings
 
 Topic clustering / dedup can use embeddings when a key is present; without one,

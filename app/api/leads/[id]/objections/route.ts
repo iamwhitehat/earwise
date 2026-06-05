@@ -1,5 +1,6 @@
 import type { NextRequest } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
+import { gateUsage } from '@/lib/usage-credits-db'
 import { loadLeadById } from '@/lib/leads-db'
 import { addMessage } from '@/lib/lead-messages-db'
 import { loadSignals } from '@/lib/signals-db'
@@ -77,6 +78,10 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
 
   const lead = await loadLeadById(db, leadId, projectId)
   if (!lead) return Response.json({ error: 'Lead not found' }, { status: 404 })
+
+  // Usage-credit gate (margin guard) — Haiku draft.
+  const over = await gateUsage(db, projectId, 'draft')
+  if (over) return over
 
   const memFacts = await loadMemoryFacts(db, projectId)
   const draft = await draftObjectionResponse({

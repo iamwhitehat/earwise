@@ -5,7 +5,7 @@
 import 'server-only'
 
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { classifyPost, extractTopic } from '../claude'
+import { classifyAndExtractBatch, CLASSIFY_BATCH_SIZE, PRIORITY } from '../claude'
 import { canonicalTopic } from '../topics'
 import { postDedupeKey } from '../dedup'
 import { embedTexts, cosineSimilarity } from '../embeddings'
@@ -89,20 +89,25 @@ export async function ingestSources(
   // 4. Classify + canonical topic (Haiku, throttled) per new signal.
   const knownTopics = await loadKnownTopics(db)
   const prepared: PreparedSignal[] = []
-  for (const s of candidates) {
+  for (let start = 0; start < candidates.length; start += CLASSIFY_BATCH_SIZE) {
     if (opts.signal?.aborted) break
-    const body = s.body.trim().slice(0, 800)
-    const [classification, topic] = await Promise.all([
-      classifyPost(s.title, body),
-      extractTopic(s.title, body, knownTopics),
-    ])
-    prepared.push({
-      ...s,
-      category: classification.category,
-      confidence: classification.confidence,
-      topic,
-      canonicalTopic: canonicalTopic(topic),
-      embedding: null,
+    const batch = candidates.slice(start, start + CLASSIFY_BATCH_SIZE)
+    // One throttled Claude call per batch (was one-or-two per signal).
+    // BULK: cron/multi-source ingest is background work — yields to foreground.
+    const results = await classifyAndExtractBatch(
+      batch.map((s) => ({ title: s.title, selftext: s.body })),
+      { knownTopics, priority: PRIORITY.BULK },
+    )
+    batch.forEach((s, j) => {
+      const { category, confidence, topic } = results[j]
+      prepared.push({
+        ...s,
+        category,
+        confidence,
+        topic,
+        canonicalTopic: canonicalTopic(topic),
+        embedding: null,
+      })
     })
   }
 

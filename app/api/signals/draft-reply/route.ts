@@ -2,6 +2,7 @@ import type { NextRequest } from 'next/server'
 import { draftSignalReply } from '@/lib/claude'
 import { getSupabase } from '@/lib/supabase'
 import { activeProjectId } from '@/lib/project-server'
+import { gateUsage } from '@/lib/usage-credits-db'
 import { loadVoiceSamples } from '@/lib/voice-db'
 import { loadVoiceBrief } from '@/lib/voice-brief-db'
 import type { VoiceBrief } from '@/lib/voice-brief'
@@ -57,6 +58,15 @@ export async function POST(req: NextRequest) {
       { error: `Text too long (max ${MAX_TEXT} chars)` },
       { status: 400 }
     )
+  }
+
+  // Usage-credit gate (margin guard) — Haiku draft.
+  try {
+    const db = getSupabase()
+    const over = await gateUsage(db, await activeProjectId(), 'draft')
+    if (over) return over
+  } catch {
+    /* DB unavailable → chargeCredits would fail-open anyway; proceed. */
   }
 
   const voice = await voiceContextOrNone()

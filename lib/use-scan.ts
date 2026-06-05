@@ -41,6 +41,31 @@ function isAbortError(err: unknown): boolean {
   )
 }
 
+// Diversify sources: after a Reddit scan, also pull Hacker News + StackOverflow
+// for the same topics (best-effort, fire-and-forget) so Reddit isn't the only
+// leg — they land in the `signals` table and feed Insights' cross-source
+// confirmation. Throttled so rapid re-scans don't repeatedly hit the connectors;
+// a 402 (over usage budget) or any error just skips HN/SO this round.
+const DIVERSIFY_COOLDOWN_MS = 30 * 60 * 1000
+const DIVERSIFY_KEY = 'reddit-reader:last-diversify'
+
+function maybeDiversifySources(subs: string[]): void {
+  if (subs.length === 0) return
+  try {
+    const last = Number(localStorage.getItem(DIVERSIFY_KEY) ?? '0')
+    if (Date.now() - last < DIVERSIFY_COOLDOWN_MS) return
+    localStorage.setItem(DIVERSIFY_KEY, String(Date.now()))
+  } catch {
+    /* localStorage unavailable — proceed without the throttle */
+  }
+  const queries = subs.slice(0, 6) // subreddit names double as HN/SO search terms
+  fetch('/api/sources/ingest', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ hackernews: queries, stackoverflow: queries }),
+  }).catch(() => {})
+}
+
 async function fetchSubPage(
   sub: string,
   opts: {
@@ -503,6 +528,9 @@ export function useScan(watchlist: string[], hydrated: boolean, postsPerScan: nu
     if (scanControllerRef.current === controller) {
       scanControllerRef.current = null
     }
+    // Diversify: also pull HN + StackOverflow for the same topics (fire-and-forget)
+    // so Reddit isn't the only source feeding cross-source insights.
+    maybeDiversifySources(subs)
     // Roll all downstream derived datasets forward in one go — snapshot
     // (already happened before this batch) plus Insights + Buyer Language.
     triggerPostScanRefreshes()
@@ -614,6 +642,10 @@ export function useScan(watchlist: string[], hydrated: boolean, postsPerScan: nu
   async function deepScanPost(
     sub: string,
     postId: string,
+    // A single "Deep scan" click is foreground (the user waits on this one
+    // post); the bulk loop leaves it false so it stays BULK and yields to
+    // foreground work. The server maps this to the Claude call's priority.
+    foreground = false,
   ): Promise<DeepScanPatch | null> {
     const key = `${sub}:${postId}`
     setDeepScanning((prev) => {
@@ -632,7 +664,7 @@ export function useScan(watchlist: string[], hydrated: boolean, postsPerScan: nu
       const res = await fetch('/api/deep-scan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ subreddit: sub, postId }),
+        body: JSON.stringify({ subreddit: sub, postId, foreground }),
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error ?? `Deep scan failed: ${res.status}`)

@@ -3415,7 +3415,7 @@ export function PostCard({
   const eligible = post.category !== 'other'
 
   async function handleDeepScan() {
-    const patch = await scan.deepScanPost(post.subreddit, post.id)
+    const patch = await scan.deepScanPost(post.subreddit, post.id, true)
     if (patch) setLocalPatch(patch)
   }
 

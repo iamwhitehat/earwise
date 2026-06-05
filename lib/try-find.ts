@@ -8,8 +8,10 @@ import type { RawSignal } from './sources/types'
 import { makerPreflag, type BuyerIntentResult } from './buyer-intent'
 import {
   findFirstMatch,
+  INTENT_PATTERNS,
   INTENT_TYPE_LABEL,
   type IntentType,
+  type Pattern,
 } from './intent-patterns'
 import { scoreLead, type Tier } from './lead-score'
 
@@ -54,12 +56,16 @@ export const SHORTLIST_CAP = 8
  * with the deterministic pre-flag, and tag each with its earliest non-negated
  * intent phrase. Pure.
  */
-export function prepareCandidates(signals: RawSignal[], subreddit: string): FindCandidate[] {
+export function prepareCandidates(
+  signals: RawSignal[],
+  subreddit: string,
+  patterns: Pattern[] = INTENT_PATTERNS,
+): FindCandidate[] {
   const out: FindCandidate[] = []
   for (const s of signals) {
     const text = TITLE_BODY(s)
     if (!text || makerPreflag(text)) continue
-    const match = findFirstMatch(text)
+    const match = findFirstMatch(text, patterns)
     out.push({
       externalId: s.externalId,
       title: s.title,

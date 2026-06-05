@@ -1,6 +1,6 @@
 import type { NextRequest } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
-import { listProjects, createProject, ensureDefaultProject } from '@/lib/projects-db'
+import { listProjects, createProject, ensureDefaultProject, setProjectNiche } from '@/lib/projects-db'
 import { activeProjectId, setActiveProjectId } from '@/lib/project-server'
 import { normalizeProjectName } from '@/lib/projects'
 
@@ -54,6 +54,39 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Create failed'
     console.error('[projects] create error:', err)
+    return Response.json({ error: `${message}. ${MIGRATION_HINT}` }, { status: 500 })
+  }
+}
+
+// PATCH /api/projects — set the ACTIVE workspace's niche (the relevance anchor).
+// Body: { niche }
+export async function PATCH(req: NextRequest) {
+  let body: unknown
+  try {
+    body = await req.json()
+  } catch {
+    return Response.json({ error: 'Invalid JSON body' }, { status: 400 })
+  }
+  const raw = (body ?? {}) as { niche?: unknown }
+  const niche = typeof raw.niche === 'string' ? raw.niche : ''
+
+  let db
+  try {
+    db = getSupabase()
+  } catch (err) {
+    return Response.json(
+      { error: err instanceof Error ? err.message : 'Configuration error' },
+      { status: 500 }
+    )
+  }
+
+  try {
+    const id = await activeProjectId()
+    const project = await setProjectNiche(db, id, niche)
+    return Response.json({ project })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Update failed'
+    console.error('[projects] niche update error:', err)
     return Response.json({ error: `${message}. ${MIGRATION_HINT}` }, { status: 500 })
   }
 }

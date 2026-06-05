@@ -27,6 +27,12 @@ export type InsightV2 = {
   evidence: InsightEvidence[]
   /** Distinct sources confirming this opportunity (e.g. reddit, hackernews). */
   confirmedSources: string[]
+  /**
+   * The canonical topic label(s) this insight was synthesized from — the link
+   * back to the underlying buyer signals. Optional: insights generated before
+   * this field existed won't have it (they need a re-refresh to populate).
+   */
+  topics?: string[]
   confidence: Confidence
 }
 

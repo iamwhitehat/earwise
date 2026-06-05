@@ -1,0 +1,9 @@
+<svg width="430" height="160" viewBox="0 0 430 160" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="wedj">
+  <g transform="translate(20,16)">
+    <circle cx="44" cy="92" r="8" fill="#5C9A12"/>
+    <path d="M64,92 A20,20 0 0 0 44,72" fill="none" stroke="#7CC520" stroke-width="8" stroke-linecap="round"/>
+    <path d="M80,92 A36,36 0 0 0 44,56" fill="none" stroke="#7CC520" stroke-width="8" stroke-linecap="round"/>
+    <path d="M96,92 A52,52 0 0 0 44,40" fill="none" stroke="#A6E63A" stroke-width="8" stroke-linecap="round"/>
+  </g>
+  <text x="150" y="108" font-family="Geist, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="94" font-weight="700" letter-spacing="-5" fill="#14151A">wedj</text>
+</svg>

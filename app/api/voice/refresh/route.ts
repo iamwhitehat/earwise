@@ -1,6 +1,7 @@
 import type { NextRequest } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
 import { activeProjectId } from '@/lib/project-server'
+import { gateUsage } from '@/lib/usage-credits-db'
 import { resolveSynthModel, synthesizeVoiceBrief } from '@/lib/claude'
 import { renderMessagingInput } from '@/lib/buyer-language-aggregator'
 import { renderProfile, normalizeProfile, EMPTY_PROFILE } from '@/lib/strategy'
@@ -53,6 +54,10 @@ export async function POST(req: NextRequest) {
   }
 
   const projectId = await activeProjectId()
+
+  // Usage-credit gate (margin guard) — tier-scaled (Opus ≈ 5× Sonnet).
+  const over = await gateUsage(db, projectId, 'voice', { tier })
+  if (over) return over
 
   // 1. Ground on the latest buyer-language run (global; not re-scanned).
   const { data: bl, error: blErr } = await db

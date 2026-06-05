@@ -1,9 +1,13 @@
 import type { NextRequest } from 'next/server'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { getSupabase } from '@/lib/supabase'
+import { activeProjectId } from '@/lib/project-server'
+import { gateUsage } from '@/lib/usage-credits-db'
 import {
-  classifyPost,
-  extractTopic,
+  classifyAndExtractBatch,
+  extractTopicsBatch,
+  CLASSIFY_BATCH_SIZE,
+  PRIORITY,
   type Category,
   type ExampleSet,
   type ClassificationExample,
@@ -204,6 +208,12 @@ export async function GET(req: NextRequest, ctx: RouteContext<'/api/posts/[subre
   const countRaw = url.searchParams.get('count')
   const limit = parseLimit(url.searchParams.get('limit'))
 
+  // A paginated request (`after` set) is a user clicking "Load more" — make its
+  // Claude work FOREGROUND so it jumps ahead of any in-flight bulk scan/deep-scan
+  // instead of queueing behind hundreds of throttled calls. The first page of a
+  // scan is NORMAL.
+  const priority = after ? PRIORITY.FOREGROUND : PRIORITY.NORMAL
+
   // ─── Pre-flight: Reddit fetch (may paginate internally if limit > 100) ─────
   const fetched = await fetchRedditPages(subreddit, limit, after, countRaw, req.signal)
   if (!fetched.ok) {
@@ -283,6 +293,17 @@ export async function GET(req: NextRequest, ctx: RouteContext<'/api/posts/[subre
 
   const indexById = new Map(posts.map((p, i) => [p.id, i]))
 
+  // Usage-credit gate (margin guard) — charge per Haiku classify/backfill BATCH,
+  // and only when there's actual Claude work (all-cached re-scans cost nothing,
+  // so they're free). Gate BEFORE streaming so we can return a real 402.
+  const scanUnits =
+    Math.ceil(newPosts.length / CLASSIFY_BATCH_SIZE) +
+    Math.ceil(backfillPosts.length / CLASSIFY_BATCH_SIZE)
+  if (scanUnits > 0) {
+    const over = await gateUsage(db, await activeProjectId(), 'scan', { units: scanUnits })
+    if (over) return over
+  }
+
   // Pre-flight done — switch to streaming. The work below issues Claude calls
   // sequentially (throttled in lib/claude.ts) and emits progress per post.
   return ndjsonStream(async (sink) => {
@@ -344,106 +365,122 @@ export async function GET(req: NextRequest, ctx: RouteContext<'/api/posts/[subre
       examples = exampleSet
     }
 
-    // 2. Classify new posts sequentially (throttled in lib/claude.ts).
-    //    Per-post upsert so a client abort mid-scan still persists everything
-    //    classified up to that point. Check req.signal before each Claude
-    //    call so we don't burn API budget on posts the user no longer wants.
+    // 2. Classify new posts in batches (one throttled Claude call per batch of
+    //    CLASSIFY_BATCH_SIZE, vs one-or-two per post before). Per-batch upsert so
+    //    a client abort mid-scan still persists every batch completed up to that
+    //    point. Check req.signal before each batch so we don't burn API budget on
+    //    posts the user no longer wants.
     if (newPosts.length > 0) {
       sink.send({ type: 'progress', phase: 'classify', current: 0, total: newPosts.length })
-      let i = 0
-      for (const p of newPosts) {
+      let done = 0
+      for (let start = 0; start < newPosts.length; start += CLASSIFY_BATCH_SIZE) {
         if (req.signal.aborted) break
-        const [classification, candidateTopic] = await Promise.all([
-          classifyPost(p.title, p.selftext, examples),
-          extractTopic(p.title, p.selftext, knownTopics),
-        ])
-        const { category, confidence } = classification
-        const topic = category === 'other' ? null : candidateTopic
-        const { error: insertError } = await db.from('posts').upsert(
-          {
+        const batch = newPosts.slice(start, start + CLASSIFY_BATCH_SIZE)
+        const results = await classifyAndExtractBatch(
+          batch.map((p) => ({ title: p.title, selftext: p.selftext })),
+          { examples, knownTopics, priority },
+        )
+        const rows = batch.map((p, j) => ({
+          post_id: p.id,
+          subreddit,
+          title: p.title,
+          selftext: p.selftext,
+          author: p.author,
+          permalink: p.permalink,
+          category: results[j].category,
+          topic: results[j].topic,
+          confidence: results[j].confidence,
+          posted_at: p.postedAt ? new Date(p.postedAt).toISOString() : null,
+        }))
+        const { error: insertError } = await db
+          .from('posts')
+          .upsert(rows, { onConflict: 'post_id,subreddit', ignoreDuplicates: true })
+        if (insertError) console.error('[supabase] insert error:', insertError)
+        for (let j = 0; j < batch.length; j++) {
+          const p = batch[j]
+          const r = results[j]
+          sink.send({
+            type: 'post',
+            index: indexById.get(p.id)!,
+            post: {
+              ...p,
+              category: r.category,
+              topic: r.topic,
+              analyzedAt: Date.now(),
+              tools: null,
+              quotes: null,
+              commentsScannedAt: null,
+              commentsSampled: null,
+              confidence: r.confidence,
+            },
+          })
+        }
+        done += batch.length
+        sink.send({ type: 'progress', phase: 'classify', current: done, total: newPosts.length })
+      }
+    }
+
+    // 3. Backfill topics on previously-classified cached posts — batched,
+    //    topic-only (categories are already known and never change here).
+    //    Per-batch upsert. Re-emit each post with its newly-extracted topic;
+    //    the client replaces by id.
+    if (backfillPosts.length > 0) {
+      sink.send({ type: 'progress', phase: 'backfill', current: 0, total: backfillPosts.length })
+      let done = 0
+      for (let start = 0; start < backfillPosts.length; start += CLASSIFY_BATCH_SIZE) {
+        if (req.signal.aborted) break
+        const batch = backfillPosts.slice(start, start + CLASSIFY_BATCH_SIZE)
+        const topics = await extractTopicsBatch(
+          batch.map((p) => ({ title: p.title, selftext: p.selftext })),
+          knownTopics,
+          priority,
+        )
+        const rows = batch
+          .map((p, j) => ({ p, topic: topics[j], cached: cachedById.get(p.id)! }))
+          .filter((x) => x.topic !== null)
+          .map(({ p, topic, cached }) => ({
             post_id: p.id,
             subreddit,
             title: p.title,
             selftext: p.selftext,
             author: p.author,
             permalink: p.permalink,
-            category,
-            topic,
-            confidence,
-            posted_at: p.postedAt ? new Date(p.postedAt).toISOString() : null,
-          },
-          { onConflict: 'post_id,subreddit', ignoreDuplicates: true },
-        )
-        if (insertError) console.error('[supabase] insert error:', insertError)
-        sink.send({
-          type: 'post',
-          index: indexById.get(p.id)!,
-          post: {
-            ...p,
-            category,
-            topic,
-            analyzedAt: Date.now(),
-            tools: null,
-            quotes: null,
-            commentsScannedAt: null,
-            commentsSampled: null,
-            confidence,
-          },
-        })
-        i++
-        sink.send({ type: 'progress', phase: 'classify', current: i, total: newPosts.length })
-      }
-    }
-
-    // 3. Backfill topics on previously-classified cached posts. Per-post
-    //    upsert again. Re-emit each post with its newly-extracted topic; the
-    //    client replaces by id.
-    if (backfillPosts.length > 0) {
-      sink.send({ type: 'progress', phase: 'backfill', current: 0, total: backfillPosts.length })
-      let i = 0
-      for (const p of backfillPosts) {
-        if (req.signal.aborted) break
-        const topic = await extractTopic(p.title, p.selftext, knownTopics)
-        const cached = cachedById.get(p.id)!
-        if (topic !== null) {
-          const { error: updateError } = await db.from('posts').upsert(
-            {
-              post_id: p.id,
-              subreddit,
-              title: p.title,
-              selftext: p.selftext,
-              author: p.author,
-              permalink: p.permalink,
-              category: cached.category,
-              topic,
-              // Backfill posted_at on legacy rows that pre-date the Atom
-              // <published> capture. Newer rows already have it; the value
-              // doesn't change between scans so re-writing is safe.
-              posted_at: p.postedAt ? new Date(p.postedAt).toISOString() : null,
-            },
-            { onConflict: 'post_id,subreddit' },
-          )
-          if (updateError) console.error('[supabase] topic backfill error:', updateError)
-        }
-        sink.send({
-          type: 'post',
-          index: indexById.get(p.id)!,
-          // Preserve the original analyzed_at so the topic-update doesn't make
-          // the post jump to the top of the list. Same for cached insights.
-          post: {
-            ...p,
             category: cached.category,
             topic,
-            analyzedAt: cached.analyzedAt,
-            tools: cached.tools,
-            quotes: cached.quotes,
-            commentsScannedAt: cached.commentsScannedAt,
-            commentsSampled: cached.commentsSampled,
-            confidence: cached.confidence,
-          },
-        })
-        i++
-        sink.send({ type: 'progress', phase: 'backfill', current: i, total: backfillPosts.length })
+            // Backfill posted_at on legacy rows that pre-date the Atom
+            // <published> capture. Newer rows already have it; the value
+            // doesn't change between scans so re-writing is safe.
+            posted_at: p.postedAt ? new Date(p.postedAt).toISOString() : null,
+          }))
+        if (rows.length > 0) {
+          const { error: updateError } = await db
+            .from('posts')
+            .upsert(rows, { onConflict: 'post_id,subreddit' })
+          if (updateError) console.error('[supabase] topic backfill error:', updateError)
+        }
+        for (let j = 0; j < batch.length; j++) {
+          const p = batch[j]
+          const cached = cachedById.get(p.id)!
+          sink.send({
+            type: 'post',
+            index: indexById.get(p.id)!,
+            // Preserve the original analyzed_at so the topic-update doesn't make
+            // the post jump to the top of the list. Same for cached insights.
+            post: {
+              ...p,
+              category: cached.category,
+              topic: topics[j],
+              analyzedAt: cached.analyzedAt,
+              tools: cached.tools,
+              quotes: cached.quotes,
+              commentsScannedAt: cached.commentsScannedAt,
+              commentsSampled: cached.commentsSampled,
+              confidence: cached.confidence,
+            },
+          })
+        }
+        done += batch.length
+        sink.send({ type: 'progress', phase: 'backfill', current: done, total: backfillPosts.length })
       }
     }
 

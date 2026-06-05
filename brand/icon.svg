@@ -1,0 +1,7 @@
+<svg width="256" height="256" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="earwise logo mark">
+  <rect x="8" y="8" width="240" height="240" rx="56" fill="#0E0F13"/>
+  <circle cx="88" cy="168" r="15" fill="#B6FF3C"/>
+  <path d="M126,168 A38,38 0 0 0 88,130" fill="none" stroke="#B6FF3C" stroke-width="16" stroke-linecap="round"/>
+  <path d="M157,168 A69,69 0 0 0 88,99" fill="none" stroke="#B6FF3C" stroke-width="16" stroke-linecap="round"/>
+  <path d="M186,168 A98,98 0 0 0 88,70" fill="none" stroke="#9BE22A" stroke-width="16" stroke-linecap="round"/>
+</svg>

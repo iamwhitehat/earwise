@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { scoreSignal, rankHotSignals, type HotSignal } from './hot-signals'
+import {
+  scoreSignal,
+  rankHotSignals,
+  isFreshEnoughToReply,
+  MAX_REPLY_AGE_MS,
+  type HotSignal,
+} from './hot-signals'
 import type { SignalRow } from './signals-db'
 
 const NOW = 1_700_000_000_000
@@ -50,6 +56,42 @@ describe('scoreSignal', () => {
   it('carries the relevance factor in the breakdown', () => {
     const s = scoreSignal(sig({ intentType: 'looking-for', analyzedAt: NOW }), 0.5, 0.8, NOW)
     expect(s.breakdown.relevance.value).toBeCloseTo(0.8)
+  })
+  it('recency uses true postedAt, not scan time — a stale thread scanned now scores low', () => {
+    // Scanned this instant (analyzedAt = NOW) but actually posted 60 days ago.
+    const stale = scoreSignal(
+      sig({ intentType: 'willing-to-pay', analyzedAt: NOW, postedAt: NOW - 60 * 86_400_000 }),
+      1,
+      1,
+      NOW,
+    )
+    const fresh = scoreSignal(
+      sig({ intentType: 'willing-to-pay', analyzedAt: NOW, postedAt: NOW }),
+      1,
+      1,
+      NOW,
+    )
+    expect(stale.breakdown.recency.value).toBeLessThan(fresh.breakdown.recency.value)
+    expect(stale.score).toBeLessThan(fresh.score)
+  })
+  it('falls back to analyzedAt when postedAt is unknown', () => {
+    const withPosted = scoreSignal(sig({ analyzedAt: NOW, postedAt: NOW }), 0.5, 0.5, NOW)
+    const noPosted = scoreSignal(sig({ analyzedAt: NOW }), 0.5, 0.5, NOW) // postedAt undefined
+    expect(noPosted.breakdown.recency.value).toBeCloseTo(withPosted.breakdown.recency.value)
+  })
+})
+
+describe('isFreshEnoughToReply', () => {
+  const NOW2 = 1_700_000_000_000
+  it('allows a post inside the reply window', () => {
+    expect(isFreshEnoughToReply({ postedAt: NOW2 - 1 * 3600_000 }, MAX_REPLY_AGE_MS, NOW2)).toBe(true)
+  })
+  it('rejects a post past the reply window', () => {
+    expect(isFreshEnoughToReply({ postedAt: NOW2 - 72 * 3600_000 }, MAX_REPLY_AGE_MS, NOW2)).toBe(false)
+  })
+  it('does not gate when the true age is unknown (null)', () => {
+    expect(isFreshEnoughToReply({ postedAt: null }, MAX_REPLY_AGE_MS, NOW2)).toBe(true)
+    expect(isFreshEnoughToReply({}, MAX_REPLY_AGE_MS, NOW2)).toBe(true)
   })
 })
 

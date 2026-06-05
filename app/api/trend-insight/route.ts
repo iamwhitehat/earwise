@@ -1,6 +1,9 @@
 import type { NextRequest } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
 import { summarizeTrend } from '@/lib/claude'
+import { canonicalTopic } from '@/lib/topics'
+
+const VOCAB_CAP = 5000
 
 const SAMPLE_SIZE = 30
 
@@ -40,11 +43,43 @@ export async function GET(req: NextRequest) {
     return Response.json({ insight: cached.insight as string, cached: true })
   }
 
-  // 2. Sample titles for the prompt.
+  // 2. Resolve the canonical topic label to its raw variants. The Trends list
+  //    groups by canonical topic (so "lead generation problems", "lead gen
+  //    issues", … all merge under "lead generation problem"), but posts.topic
+  //    stores the RAW labels — a raw-equality match here finds nothing for a
+  //    merged trend. Map the canonical label back to the raw topics that reduce
+  //    to it (same pattern as /api/posts-by-topic), then query those.
+  const target = canonicalTopic(topic)
+  if (!target) {
+    return Response.json({ error: `No posts found for topic "${topic}"` }, { status: 404 })
+  }
+
+  const { data: vocabRows, error: vocabErr } = await db
+    .from('posts')
+    .select('topic')
+    .not('topic', 'is', null)
+    .limit(VOCAB_CAP)
+  if (vocabErr) {
+    console.error('[supabase] trend-insight vocab error:', vocabErr)
+    return Response.json({ error: 'Database query failed' }, { status: 500 })
+  }
+
+  const rawTopics = Array.from(
+    new Set(
+      (vocabRows ?? [])
+        .map((r) => r.topic as string)
+        .filter((t) => canonicalTopic(t) === target),
+    ),
+  )
+  if (rawTopics.length === 0) {
+    return Response.json({ error: `No posts found for topic "${topic}"` }, { status: 404 })
+  }
+
+  // Sample titles across all raw variants for the prompt.
   const { data: titleRows, error: titleErr } = await db
     .from('posts')
     .select('title, analyzed_at')
-    .eq('topic', topic)
+    .in('topic', rawTopics)
     .order('analyzed_at', { ascending: false })
     .limit(SAMPLE_SIZE)
 

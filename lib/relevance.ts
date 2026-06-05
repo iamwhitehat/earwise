@@ -5,7 +5,11 @@
 // is never baked onto the post as a single global value. This module holds the
 // deterministic, testable bits.
 
-export type Relevance = { score: number; reason: string }
+// `screened` is true only when an actual embedding/Haiku verdict produced this
+// score. The FULLY_RELEVANT fallback (unscored / no niche / over-cap / infra
+// failure) leaves it falsy, so trust-critical surfaces (the Hot-now hero +
+// alerts) can require a real screen instead of accepting a degraded score-1.
+export type Relevance = { score: number; reason: string; screened?: boolean }
 
 /** Default qualifying threshold (cosine / score). Tunable; the gate reads it. */
 export const DEFAULT_RELEVANCE_TAU = 0.6

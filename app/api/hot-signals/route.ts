@@ -33,13 +33,19 @@ export async function GET(req: NextRequest) {
 
   try {
     const projectId = await activeProjectId()
-    const [signals, scannedAt] = await Promise.all([
+    const [hot, scannedAt] = await Promise.all([
       loadHotSignals(db, { windowMs, projectId, limit: LIMIT }),
       lastScanAt(db),
     ])
-    return Response.json({ signals, window: windowLabel, scannedAt })
+    return Response.json({
+      signals: hot.signals,
+      offNicheCount: hot.offNicheCount,
+      needsNiche: hot.needsNiche ?? false,
+      window: windowLabel,
+      scannedAt,
+    })
   } catch (err) {
     console.warn('[hot-signals] failed:', err)
-    return Response.json({ signals: [], window: windowLabel, scannedAt: null })
+    return Response.json({ signals: [], needsNiche: false, window: windowLabel, scannedAt: null })
   }
 }

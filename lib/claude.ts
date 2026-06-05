@@ -1,12 +1,16 @@
 import 'server-only'
 
 import Anthropic from '@anthropic-ai/sdk'
+import { createRateLimiter, PRIORITY, type Priority } from './rate-limiter'
 import { type Category } from './categories'
 import {
   parseClassification,
   normalizeTopic,
+  normalizeClassifyExtractBatch,
+  normalizeTopicsBatch,
   type Confidence,
   type Classification,
+  type ClassifiedTopic,
 } from './classify-parse'
 import {
   OPENER_SYSTEM_PROMPT,
@@ -16,11 +20,13 @@ import {
 } from './opener'
 import {
   PERSONA_SYSTEM_PROMPT,
+  PERSONA_SYSTEM_PROMPT_SHORT,
   DRAFT_TEMPERATURE,
   pickShape,
   selectVoiceSamples,
   renderShapeDirective,
   renderVoiceAnchor,
+  type DraftShape,
 } from './voice'
 import {
   buildVoiceInput,
@@ -49,6 +55,9 @@ import {
 
 export type { Category }
 export type { InsightV2, MessagingAssets }
+// Re-exported so API routes can tag their Claude work without importing the
+// rate-limiter directly (load-more = FOREGROUND, bulk deep-scan / cron = BULK).
+export { PRIORITY, type Priority }
 
 const VALID: ReadonlySet<Category> = new Set([
   'pain_point',
@@ -95,44 +104,60 @@ function getClient(): Anthropic {
 }
 
 // ─── Global throttle ──────────────────────────────────────────────────────────
-// 1.5s gap between successful Claude calls = ~40 req/min, safely under the
-// 50 req/min tier. Queue is shared across the whole process, so concurrent
-// per-subreddit requests all serialize through the same gate.
+// Every Claude call goes through one process-wide rate limiter so we stay under
+// the account's requests/min limit. It is PRIORITY-AWARE: a user-initiated
+// FOREGROUND call (e.g. "Load more") jumps ahead of background BULK work (a
+// 100-post deep-scan, cron ingest) instead of queueing behind all of it.
+// Bounded concurrency lets a foreground call overlap a slow in-flight call
+// (e.g. a 30s Opus synthesis) rather than waiting it out. See lib/rate-limiter.ts.
 //
-// On 429: pause the entire queue for 60s before retrying. We retry up to twice
-// inside the same slot, so other waiters back off too (they would also 429).
+// On 429: back the whole dispatcher off for 60s, then retry (up to twice) in the
+// same slot — so concurrent waiters back off too (they would also 429).
 
-const MIN_GAP_MS = 1500
+// The 1.5s default keeps starts ~40 req/min, safely under the 50 req/min tier.
+// Override with CLAUDE_MIN_GAP_MS for higher-tier accounts (e.g. 600 ≈ 100/min)
+// — lower = faster scans, but too low for your rate limit means 429 backoffs.
+// Clamped to [0, 10000]; a non-numeric/empty value falls back to the default.
+function resolveMinGapMs(): number {
+  const raw = process.env.CLAUDE_MIN_GAP_MS
+  if (raw === undefined || raw.trim() === '') return 1500
+  const n = Number(raw)
+  if (!Number.isFinite(n)) return 1500
+  return Math.min(10_000, Math.max(0, Math.round(n)))
+}
+
+// Max Claude calls in flight at once. >1 lets a foreground call overlap a slow
+// in-flight one; it does NOT raise the start rate (still ≤ 1 start / MIN_GAP_MS).
+// Override with CLAUDE_MAX_CONCURRENCY; clamped to [1, 8], default 2.
+function resolveMaxConcurrency(): number {
+  const raw = process.env.CLAUDE_MAX_CONCURRENCY
+  if (raw === undefined || raw.trim() === '') return 2
+  const n = Number(raw)
+  if (!Number.isFinite(n)) return 2
+  return Math.min(8, Math.max(1, Math.round(n)))
+}
+
+const MIN_GAP_MS = resolveMinGapMs()
+const MAX_CONCURRENCY = resolveMaxConcurrency()
 const RETRY_DELAY_MS = 60_000
 const MAX_RETRIES = 2
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
 
-let chain: Promise<unknown> = Promise.resolve()
-
-async function throttle<T>(fn: () => Promise<T>): Promise<T> {
-  const prev = chain
-  let release!: () => void
-  chain = new Promise<void>((r) => { release = r })
-  try {
-    await prev.catch(() => {})
-    return await fn()
-  } finally {
-    setTimeout(release, MIN_GAP_MS)
-  }
-}
+const limiter = createRateLimiter({ minGapMs: MIN_GAP_MS, maxConcurrency: MAX_CONCURRENCY })
 
 function isRateLimit(err: unknown): boolean {
   return typeof err === 'object' && err !== null && (err as { status?: number }).status === 429
 }
 
-async function callClaude<T>(make: () => Promise<T>): Promise<T> {
-  return throttle(async () => {
+async function callClaude<T>(make: () => Promise<T>, priority: number = PRIORITY.NORMAL): Promise<T> {
+  return limiter.schedule(priority, async () => {
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       try {
         return await make()
       } catch (err) {
         if (!isRateLimit(err) || attempt === MAX_RETRIES) throw err
+        limiter.pauseFor(RETRY_DELAY_MS) // back off the whole dispatcher
         console.warn(
           `[claude] 429 received, retrying in ${RETRY_DELAY_MS / 1000}s ` +
           `(attempt ${attempt + 1}/${MAX_RETRIES})`
@@ -157,6 +182,7 @@ export async function callStructured<T = unknown>(
   user: string,
   tool: StructuredTool,
   maxTokens = 2000,
+  priority: number = PRIORITY.NORMAL,
 ): Promise<T | null> {
   try {
     const msg = await callClaude(() =>
@@ -167,7 +193,8 @@ export async function callStructured<T = unknown>(
         tools: [tool],
         tool_choice: { type: 'tool', name: tool.name },
         messages: [{ role: 'user', content: user }],
-      })
+      }),
+      priority,
     )
     // When the model hits the token ceiling mid tool-call, the API returns a
     // truncated tool_use whose `input` is an empty/partial object — the caller's
@@ -308,6 +335,133 @@ export async function extractTopic(
     console.error('[claude] extractTopic error:', err)
     return null
   }
+}
+
+// ─── Batched classify + topic ─────────────────────────────────────────────────
+// Classify MANY posts in ONE Claude call. The throttle serializes every call
+// with a fixed gap, so collapsing N posts into ceil(N/BATCH) calls is the real
+// scan speedup (e.g. 60 posts: 60 calls → 8). The model returns one entry per
+// post tagged with its 1-based index; normalizeClassifyExtractBatch re-aligns
+// by index so a scrambled/partial response never lands a result on the wrong
+// post. Per-batch failure degrades to all-defaults for that batch, never throws.
+export const CLASSIFY_BATCH_SIZE = 8
+
+const CLASSIFY_BATCH_TOOL: StructuredTool = {
+  name: 'classify_posts',
+  description: 'Classify every numbered post and extract its topic; return exactly one entry per post.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      classifications: {
+        type: 'array',
+        description: 'One entry per numbered post. Order does not matter; the index field maps each entry to its post.',
+        items: {
+          type: 'object',
+          properties: {
+            index: { type: 'integer', description: 'The post number from its [n] marker (1-based).' },
+            category: { type: 'string', enum: ['pain_point', 'feature_request', 'tool_complaint', 'other'] },
+            confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
+            topic: {
+              type: 'string',
+              description: '2–4 lowercase words naming the post\'s concept; empty string when category is "other" or there is no clear topic.',
+            },
+          },
+          required: ['index', 'category', 'confidence', 'topic'],
+        },
+      },
+    },
+    required: ['classifications'],
+  },
+}
+
+const CLASSIFY_BATCH_SYSTEM = `${SYSTEM_PROMPT_BASE}
+
+You classify MULTIPLE posts in one pass. For EACH numbered post, assign a category, a confidence, and a short topic label.
+
+Topic label rules:
+- 2 to 4 lowercase words, no punctuation
+- Describe a concept that other similar posts would also match — not a specific named entity or one-off detail
+- If a label from the "Known topics" list in the user message fits, reuse it exactly; otherwise coin a new short label in the same shape
+- Use an empty string for the topic when the category is "other" or there's no clear topic
+
+Call the classify_posts tool with one entry per post: its index (matching the [n] marker), category, confidence, and topic. Return an entry for EVERY post — do not skip any.`
+
+function renderKnownTopics(knownTopics: string[]): string {
+  return knownTopics.length > 0
+    ? `Known topics (reuse one exactly if it fits):\n${knownTopics.map((t) => `- ${t}`).join('\n')}\n\n`
+    : ''
+}
+
+function renderNumberedPosts(posts: Array<{ title: string; selftext: string }>): string {
+  return posts
+    .map((p, i) => {
+      const body = p.selftext.trim().slice(0, 800)
+      return body ? `[${i + 1}]\nTitle: ${p.title}\n\nBody: ${body}` : `[${i + 1}]\nTitle: ${p.title}`
+    })
+    .join('\n\n')
+}
+
+export async function classifyAndExtractBatch(
+  posts: Array<{ title: string; selftext: string }>,
+  opts: { examples?: ExampleSet; knownTopics?: string[]; priority?: number } = {},
+): Promise<ClassifiedTopic[]> {
+  if (posts.length === 0) return []
+  const user =
+    `${renderKnownTopics(opts.knownTopics ?? [])}Classify each of the ${posts.length} numbered posts below. ` +
+    `Return exactly one entry per post, matching its [n] number.\n\nPosts:\n\n${renderNumberedPosts(posts)}`
+  const system = CLASSIFY_BATCH_SYSTEM + (opts.examples ? renderExamples(opts.examples) : '')
+  const maxTokens = Math.min(4096, 300 + posts.length * 90)
+  const result = await callStructured(
+    MODEL_BULK, system, user, CLASSIFY_BATCH_TOOL, maxTokens, opts.priority ?? PRIORITY.NORMAL,
+  )
+  return normalizeClassifyExtractBatch(result, posts.length)
+}
+
+// ─── Batched topic-only extraction ────────────────────────────────────────────
+// For backfilling topics onto posts whose category is already known. Unlike the
+// classify batch, this never re-categorizes, so a post keeps its stored category
+// and just gains a topic. One call per BATCH posts.
+const EXTRACT_TOPICS_TOOL: StructuredTool = {
+  name: 'extract_topics',
+  description: 'Extract a short topic label for every numbered post; return one entry per post.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      topics: {
+        type: 'array',
+        description: 'One entry per numbered post. The index field maps each entry to its post.',
+        items: {
+          type: 'object',
+          properties: {
+            index: { type: 'integer', description: 'The post number from its [n] marker (1-based).' },
+            topic: { type: 'string', description: '2–4 lowercase words naming the post\'s concept; empty string if none is clear.' },
+          },
+          required: ['index', 'topic'],
+        },
+      },
+    },
+    required: ['topics'],
+  },
+}
+
+const EXTRACT_TOPICS_BATCH_SYSTEM = `${TOPIC_SYSTEM_PROMPT}
+
+You label MULTIPLE posts in one pass. For EACH numbered post, output a topic label following the rules above. Call the extract_topics tool with one entry per post: its index (matching the [n] marker) and topic. Return an entry for EVERY post.`
+
+export async function extractTopicsBatch(
+  posts: Array<{ title: string; selftext: string }>,
+  knownTopics: string[],
+  priority: number = PRIORITY.NORMAL,
+): Promise<(string | null)[]> {
+  if (posts.length === 0) return []
+  const user =
+    `${renderKnownTopics(knownTopics)}Label each of the ${posts.length} numbered posts below. ` +
+    `Return exactly one entry per post, matching its [n] number.\n\nPosts:\n\n${renderNumberedPosts(posts)}`
+  const maxTokens = Math.min(4096, 200 + posts.length * 40)
+  const result = await callStructured(
+    MODEL_BULK, EXTRACT_TOPICS_BATCH_SYSTEM, user, EXTRACT_TOPICS_TOOL, maxTokens, priority,
+  )
+  return normalizeTopicsBatch(result, posts.length)
 }
 
 const INSIGHT_SYSTEM_PROMPT = `You analyze Reddit posts to identify business opportunities.
@@ -464,7 +618,10 @@ const SUGGEST_SUBS_TOOL: StructuredTool = {
   },
 }
 
-export async function suggestSubreddits(niche: string): Promise<string[]> {
+export async function suggestSubreddits(
+  niche: string,
+  priority: number = PRIORITY.NORMAL,
+): Promise<string[]> {
   const trimmed = niche.trim()
   if (!trimmed) return []
 
@@ -474,6 +631,7 @@ export async function suggestSubreddits(niche: string): Promise<string[]> {
     `Niche: ${trimmed}`,
     SUGGEST_SUBS_TOOL,
     200,
+    priority,
   )
   const raw =
     input && typeof input === 'object' ? (input as Record<string, unknown>).subreddits : null
@@ -603,6 +761,7 @@ For each insight:
 - whyNow: why this is timely (momentum, switching, incumbent dissatisfaction).
 - evidence: 2-4 entries, each a VERBATIM quote from the provided lines and its EXACT permalink. Never invent a quote or a URL. Only use quotes + links that appear in the input.
 - confirmedSources: copy the source list from the opportunity's "confirmed in N source(s)" line exactly.
+- topics: copy the opportunity's topic label(s) EXACTLY — the short label on the "### " heading line, and NOTHING from the "demand: …" line below it. Usually one; at most two if the insight clearly merges two adjacent opportunities. These link the insight back to its source posts, so they must match the heading label verbatim — no paraphrasing, no numbers, no suffix.
 - confidence: weight cross-source confirmation heavily — high when demand triangulates AND it's confirmed in 2+ sources; medium when the pattern is clear but single-source or thin; low when it's a stretch.
 
 Do not invent opportunities, numbers, quotes, links, or sources. If the evidence for an opportunity is too thin to support an insight, still emit it but set confidence to low.`
@@ -642,11 +801,16 @@ const INSIGHT_V2_TOOL: StructuredTool = {
               },
             },
             confirmedSources: { type: 'array', items: { type: 'string' } },
+            topics: {
+              type: 'array',
+              items: { type: 'string' },
+              description: "The opportunity's topic heading(s), copied verbatim, used to link back to source posts.",
+            },
             confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
           },
           required: [
             'title', 'audience', 'problem', 'demand', 'momentum',
-            'whatToBuild', 'whyNow', 'evidence', 'confirmedSources', 'confidence',
+            'whatToBuild', 'whyNow', 'evidence', 'confirmedSources', 'topics', 'confidence',
           ],
         },
       },
@@ -722,6 +886,18 @@ function normalizeInsightsV2(raw: unknown): InsightV2[] {
       .map((s) => s.trim().toLowerCase())
       .filter(Boolean)
       .slice(0, 8)
+    // The topic label(s) linking this insight to its source posts. If the model
+    // copied the whole heading line ("topic — demand: 42 posts, …"), keep only
+    // the label before the em-dash. Deduped; canonical matching happens at query
+    // time (lib/topics), so minor casing/spelling drift still resolves.
+    const topics = Array.from(
+      new Set(
+        (Array.isArray(it.topics) ? it.topics : [])
+          .filter((t): t is string => typeof t === 'string')
+          .map((t) => t.split('—')[0].trim())
+          .filter(Boolean),
+      ),
+    ).slice(0, 3)
     out.push({
       title,
       audience: str(it.audience, 160),
@@ -736,6 +912,7 @@ function normalizeInsightsV2(raw: unknown): InsightV2[] {
       whyNow: str(it.whyNow, 600),
       evidence,
       confirmedSources,
+      topics,
       confidence: VALID_CONFIDENCE.has(conf) ? conf : 'medium',
     })
     if (out.length >= 10) break
@@ -1365,12 +1542,18 @@ export async function draftSignalReply(opts: {
   voiceSamples?: string[]
   /** The founder's distilled positioning, to keep the angle consistent (loaded in the route). */
   voiceBrief?: VoiceBrief | null
+  /** Scheduler priority for the underlying Claude call (default NORMAL). */
+  priority?: number
+  /** Public landing demo: force a short, blunt reply + the brevity persona so the
+   *  first thing a visitor reads lands fast. The in-app reply is unaffected. */
+  isPublic?: boolean
 }): Promise<string | null> {
   const text = opts.text.trim().slice(0, 2000)
   if (!text) return null
 
   // Fresh shape + voice anchor per draft so replies vary, never a template.
-  const shape = pickShape(text)
+  // The public demo is pinned short + blunt (no sprawling multi-paragraph reply).
+  const shape: DraftShape = opts.isPublic ? { length: 'short', angle: 'blunt-take' } : pickShape(text)
   const voiceAnchor = renderVoiceAnchor(selectVoiceSamples(opts.voiceSamples))
   const briefAnchor = renderVoiceBriefAnchor(opts.voiceBrief)
 
@@ -1390,11 +1573,12 @@ export async function draftSignalReply(opts: {
     const msg = await callClaude(() =>
       getClient().messages.create({
         model: MODEL_BULK,
-        max_tokens: 400,
+        max_tokens: opts.isPublic ? 200 : 400,
         temperature: DRAFT_TEMPERATURE,
-        system: DRAFT_REPLY_SYSTEM_PROMPT,
+        system: opts.isPublic ? PERSONA_SYSTEM_PROMPT_SHORT : DRAFT_REPLY_SYSTEM_PROMPT,
         messages: [{ role: 'user', content: userContent }],
-      })
+      }),
+      opts.priority ?? PRIORITY.NORMAL,
     )
     const block = msg.content[0]
     if (!block || block.type !== 'text') return null
@@ -1603,12 +1787,16 @@ export async function classifyRelevance(
   niche: string,
 ): Promise<({ relevant: boolean; reason: string } | null)[]> {
   if (items.length === 0) return []
+  // Scale the output budget with batch size (one verdict = index + bool + short
+  // reason ≈ 50 tokens). A fixed 1500 truncated past ~30 items, leaving the tail
+  // unscreened — which the fail-closed hot-signals gate then drops from the hero.
+  const maxTokens = Math.min(6000, 400 + items.length * 60)
   const input = await callStructured(
     MODEL_BULK,
     RELEVANCE_SYSTEM_PROMPT,
     buildRelevanceInput(niche, items),
     RELEVANCE_TOOL,
-    1500,
+    maxTokens,
   )
   return normalizeRelevanceVerdicts(input, items.length)
 }
@@ -1653,6 +1841,7 @@ const COMMENT_INSIGHTS_TOOL: StructuredTool = {
 export async function extractCommentInsights(
   postTitle: string,
   comments: { body: string }[],
+  priority: number = PRIORITY.NORMAL,
 ): Promise<CommentInsights> {
   if (comments.length === 0) return { tools: [], quotes: [], classifications: [] }
   const numbered = comments
@@ -1667,6 +1856,7 @@ export async function extractCommentInsights(
     userContent,
     COMMENT_INSIGHTS_TOOL,
     1200,
+    priority,
   )
   return normalizeInsights(input)
 }

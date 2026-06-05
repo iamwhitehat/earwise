@@ -12,7 +12,7 @@ export const INTENT_TYPE_LABEL: Record<IntentType, string> = {
   'willing-to-pay': 'willing to pay',
 }
 
-type Pattern = { phrase: string; intentType: IntentType }
+export type Pattern = { phrase: string; intentType: IntentType }
 
 export const INTENT_PATTERNS: Pattern[] = [
   // ── looking-for ──
@@ -49,6 +49,23 @@ export const INTENT_PATTERNS: Pattern[] = [
   { phrase: 'i would pay', intentType: 'willing-to-pay' },
   { phrase: 'happy to pay', intentType: 'willing-to-pay' },
   { phrase: 'would buy', intentType: 'willing-to-pay' },
+]
+
+/**
+ * Stricter phrase set for the PUBLIC demo (/api/public/scan) only. The demo skips
+ * the Claude buyer-intent gate (it treats a phrase-matched non-maker post as a
+ * buyer), so bare "looking for" leaks advice posts like "looking for best
+ * practices". Require an article/product noun there. The main app keeps the broad
+ * `INTENT_PATTERNS` (its Claude classifier recovers precision), so recall there is
+ * unchanged.
+ */
+export const PUBLIC_INTENT_PATTERNS: Pattern[] = [
+  ...INTENT_PATTERNS.filter((p) => p.phrase !== 'looking for'),
+  { phrase: 'looking for a', intentType: 'looking-for' },
+  { phrase: 'looking for an', intentType: 'looking-for' },
+  { phrase: 'looking for some', intentType: 'looking-for' },
+  { phrase: 'looking for software', intentType: 'looking-for' },
+  { phrase: 'looking for tools', intentType: 'looking-for' },
 ]
 
 /**

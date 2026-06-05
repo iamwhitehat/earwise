@@ -1,5 +1,7 @@
 import type { NextRequest } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
+import { activeProjectId } from '@/lib/project-server'
+import { gateUsage } from '@/lib/usage-credits-db'
 import { synthesizeInsightsV2, resolveSynthModel } from '@/lib/claude'
 import { aggregateInsights, renderAggregatedForClaude } from '@/lib/insights-aggregator'
 import { memoryDigest } from '@/lib/memory-db'
@@ -32,6 +34,11 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     )
   }
+
+  // Usage-credit gate (margin guard) — before the Sonnet/Opus synthesis spend.
+  // Tier-scaled so a Max/Opus run charges ~5× (else it under-charges + leaks margin).
+  const over = await gateUsage(db, await activeProjectId(), 'insights', { tier })
+  if (over) return over
 
   let aggregated
   try {

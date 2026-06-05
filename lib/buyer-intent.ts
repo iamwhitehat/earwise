@@ -41,11 +41,17 @@ const MAKER_PATTERNS: RegExp[] = [
   /\bi will not promote\b/i,
   /\bi (?:built|made|created|developed|launched|shipped)\b/i,
   /\bi'?m (?:building|launching|working on)\b/i,
+  /\bi'?m (?:the )?(?:author|creator|maker|founder) of\b/i,
   /\bwe(?:'re| are)? (?:building|launching)\b/i,
   /\bwe(?:'re| are)? looking for (?:users|feedback|beta|testers|early adopters)\b/i,
   /\blooking for (?:beta )?(?:users|testers|feedback|early adopters) for my\b/i,
   /\bcheck (?:out|this) my\b/i,
-  /\bmy (?:app|tool|startup|saas|product|project|side[- ]?project)\b/i,
+  /\bmy (?:app|tool|startup|saas|product|project|side[- ]?project|library|sdk|engine|reader|plugin|extension|framework)\b/i,
+  // Self-promo conventions: r/* "Showoff Saturday", HN "Show HN", Reddit "[OC]".
+  /\b(?:showoff|show\s?hn)\b/i,
+  /\[oc\]/i,
+  /\bjust (?:shipped|launched|released)\b/i,
+  /\bfeedback (?:welcome|appreciated)\b/i,
 ]
 
 export function makerPreflag(text: string): boolean {

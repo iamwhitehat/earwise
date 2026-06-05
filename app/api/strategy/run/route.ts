@@ -1,5 +1,7 @@
 import type { NextRequest } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
+import { activeProjectId } from '@/lib/project-server'
+import { gateUsage } from '@/lib/usage-credits-db'
 import { synthesizeStrategy, resolveSynthModel } from '@/lib/claude'
 import { aggregateInsights, renderAggregatedForClaude } from '@/lib/insights-aggregator'
 import {
@@ -73,6 +75,11 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     )
   }
+
+  // Usage-credit gate (margin guard) — strategy is a Sonnet/Opus run; tier-scaled.
+  // Gate BEFORE switching to the NDJSON stream so we can return a real 402.
+  const over = await gateUsage(db, await activeProjectId(), 'strategy', { tier: body.tier })
+  if (over) return over
 
   return ndjsonStream(async (sink) => {
     // 1. Profile.

@@ -49,6 +49,9 @@ export function SignalsView() {
   const subFilter = parseSub(sp.get('sub'))
   const intentFilter = parseIntent(sp.get('intent'))
   const ageFilter = parseAge(sp.get('age'))
+  // Canonical-topic filter, set by the "Act on this opportunity" link from
+  // Insights. No dropdown — it arrives via the URL and is cleared via the chip.
+  const topicFilter = (sp.get('topic') ?? '').trim() || null
 
   const updateParam = useCallback(
     (key: 'sub' | 'intent' | 'age', value: string, defaultValue: string) => {
@@ -61,6 +64,13 @@ export function SignalsView() {
     },
     [router, sp],
   )
+
+  const clearTopic = useCallback(() => {
+    const next = new URLSearchParams(sp.toString())
+    next.delete('topic')
+    next.set('view', 'signals')
+    router.replace(`/today?${next.toString()}`, { scroll: false })
+  }, [router, sp])
 
   const [signals, setSignals] = useState<Signal[]>([])
   const [subs, setSubs] = useState<string[]>([])
@@ -98,6 +108,7 @@ export function SignalsView() {
     setError(null)
     const params = new URLSearchParams({ intent: intentFilter, age: ageFilter })
     if (subFilter !== 'all') params.set('sub', subFilter)
+    if (topicFilter) params.set('topic', topicFilter)
     fetch(`/api/signals?${params.toString()}`)
       .then(async (res) => {
         const json = await res.json()
@@ -116,7 +127,7 @@ export function SignalsView() {
     return () => {
       cancelled = true
     }
-  }, [subFilter, intentFilter, ageFilter])
+  }, [subFilter, intentFilter, ageFilter, topicFilter])
 
   const counts = useMemo(() => {
     const c = { post: 0, comment: 0 }
@@ -126,6 +137,33 @@ export function SignalsView() {
 
   return (
     <>
+      {topicFilter && (
+        <div
+          className="fade-in"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            marginBottom: 12,
+            fontSize: 13,
+            color: 'var(--ink-2)',
+          }}
+        >
+          <Icons.bolt size={14} />
+          <span>
+            Buyers in opportunity:{' '}
+            <strong style={{ color: 'var(--ink)' }}>{topicFilter}</strong>
+          </span>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={clearTopic}
+            style={{ padding: '2px 8px' }}
+          >
+            <Icons.x size={12} /> Clear
+          </button>
+        </div>
+      )}
       <div className="signals-filters">
         <span className="pps">
           <span>Sub</span>
@@ -212,10 +250,25 @@ export function SignalsView() {
       {!loading && !error && signals.length === 0 && (
         <div className="card empty fade-in">
           <span className="e-ico"><Icons.bolt size={26} /></span>
-          <div>
-            No high-intent signals match these filters. Try widening the age window, switching
-            intent, or running a scan from the sidebar to collect fresh posts.
-          </div>
+          {topicFilter ? (
+            <div>
+              No one&apos;s <strong>actively asking to buy</strong> on this opportunity right now.
+              Opportunities are ranked by total discussion, so the busiest ones are often people
+              venting, not buying yet.{' '}
+              <a
+                href={`/explore?view=posts&topic=${encodeURIComponent(topicFilter)}`}
+                className="accent-link"
+                style={{ color: 'var(--accent-text)', fontWeight: 500 }}
+              >
+                Browse everyone discussing it →
+              </a>
+            </div>
+          ) : (
+            <div>
+              No high-intent signals match these filters. Try widening the age window, switching
+              intent, or running a scan from the sidebar to collect fresh posts.
+            </div>
+          )}
         </div>
       )}
 

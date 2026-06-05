@@ -5,14 +5,17 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useScanCtx, useWatchlistCtx } from '../_components/scan-provider'
 import { AdvantageOpportunityCard } from '../_components/components'
+import { HomeHero } from '../_components/home-hero'
+import { splitSamples } from '../_components/voice-samples'
 import { Icons, Spinner } from '../_components/icons'
 import { useSubSuggestions } from '@/lib/use-sub-suggestions'
 import type { MaterializedOpportunity } from '@/lib/advantage'
 
-type Step = 'niche' | 'subs' | 'scanning' | 'result'
+type Step = 'niche' | 'subs' | 'scanning' | 'voice' | 'reply'
 
 // 60-second onboarding: niche → suggested subs (same engine as SubSuggester) →
-// one scan → land on the #1 Advantage opportunity with evidence + a next action.
+// one scan → teach it your voice → land on the aha: reply to your hottest buyer
+// in your own words. The #1 opportunity rides along as a secondary "what to build".
 export default function WelcomeWizard() {
   const router = useRouter()
   const { watchlist, addSubreddit } = useWatchlistCtx()
@@ -25,14 +28,18 @@ export default function WelcomeWizard() {
   const [topOpp, setTopOpp] = useState<MaterializedOpportunity | null>(null)
   const [finalizing, setFinalizing] = useState(false)
   const [loadingDemo, setLoadingDemo] = useState(false)
+  const [voiceText, setVoiceText] = useState('')
+  const [savingVoice, setSavingVoice] = useState(false)
 
   const scanStarted = useRef(false)
   const sawStreaming = useRef(false)
   const finalized = useRef(false)
 
   // Step 1 → 2: create the workspace (best-effort) and ask for sub suggestions.
-  async function handleNiche() {
-    const n = niche.trim()
+  // `explicit` lets the pre-niche carry-over (below) drive this without waiting
+  // on the `niche` state update.
+  async function handleNiche(explicit?: string) {
+    const n = (explicit ?? niche).trim()
     if (n.length < 2 || suggesting) return
     try {
       await fetch('/api/projects', {
@@ -46,6 +53,28 @@ export default function WelcomeWizard() {
     await suggest(n)
     setStep('subs')
   }
+
+  // Carry the niche typed on the public landing/scan (ScanDemo stashes it in
+  // localStorage) into onboarding — pre-fill step 1 and auto-advance to subs so
+  // the user never re-types it. One-shot.
+  const preNicheRan = useRef(false)
+  useEffect(() => {
+    if (preNicheRan.current) return
+    preNicheRan.current = true
+    let saved = ''
+    try {
+      saved = localStorage.getItem('earwise:pre-niche') ?? ''
+      if (saved) localStorage.removeItem('earwise:pre-niche')
+    } catch {
+      /* storage unavailable */
+    }
+    const n = saved.trim()
+    if (n.length >= 2) {
+      setNiche(n)
+      handleNiche(n)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Skip setup entirely — seed + open the preloaded demo workspace.
   async function handleDemo() {
@@ -122,21 +151,46 @@ export default function WelcomeWizard() {
           setTopOpp(json.opportunities?.[0] ?? null)
         }
       } catch {
-        /* non-fatal — show the fallback result */
+        /* non-fatal — the reply step still works off hot-signals */
       } finally {
         setFinalizing(false)
-        setStep('result')
+        // → teach it your voice first, so the first draft sounds like you.
+        setStep('voice')
       }
     })()
   }, [step, scan.anyStreaming, scan.posts.length])
+
+  // Voice step → reply. Save pasted samples (best-effort) so the first opener is
+  // voice-grounded, then reveal the hottest buyer. "Skip" advances with none.
+  async function handleVoiceContinue() {
+    if (savingVoice) return
+    const samples = splitSamples(voiceText)
+    if (samples.length === 0) {
+      setStep('reply')
+      return
+    }
+    setSavingVoice(true)
+    try {
+      await fetch('/api/voice-samples', {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ samples }),
+      })
+    } catch {
+      /* non-fatal — draft falls back to the persona rules */
+    } finally {
+      setSavingVoice(false)
+      setStep('reply')
+    }
+  }
 
   const scannedCount = scan.posts.length
 
   return (
     <div className="content scroll">
-      <div className="wiz">
+      <div className="wiz" style={step === 'reply' ? { maxWidth: 760 } : undefined}>
         <div className="wiz-steps" aria-hidden="true">
-          {(['niche', 'subs', 'scanning', 'result'] as Step[]).map((s, i) => (
+          {(['niche', 'subs', 'scanning', 'voice', 'reply'] as Step[]).map((s, i) => (
             <span key={s} className={`wiz-dot${stepIndex(step) >= i ? ' on' : ''}`} />
           ))}
         </div>
@@ -146,7 +200,7 @@ export default function WelcomeWizard() {
             <h1 className="wiz-h">What are you building?</h1>
             <p className="wiz-sub">
               Name your niche and we&apos;ll find where your buyers already hang out, scan it,
-              and surface your #1 opportunity — in about a minute.
+              and draft your first reply — in your own voice — in about a minute.
             </p>
             <input
               className="wiz-input"
@@ -166,7 +220,7 @@ export default function WelcomeWizard() {
               <button
                 type="button"
                 className="btn btn-primary"
-                onClick={handleNiche}
+                onClick={() => handleNiche()}
                 disabled={niche.trim().length < 2 || suggesting}
               >
                 {suggesting ? <><Spinner size={14} /> Finding subreddits…</> : <>Continue <Icons.chev size={14} /></>}
@@ -235,44 +289,91 @@ export default function WelcomeWizard() {
           </section>
         )}
 
-        {step === 'result' && (
+        {step === 'voice' && (
           <section className="wiz-card fade-in">
-            <h1 className="wiz-h">
-              {topOpp ? 'Your #1 opportunity' : 'Scan complete'}
-            </h1>
-            {topOpp ? (
-              <>
-                <p className="wiz-sub">
-                  Ranked highest by Advantage — expected value for you. Tap the gauge for the
-                  evidence behind the score.
-                </p>
-                <div className="opp-grid" style={{ marginBottom: 'var(--gap)' }}>
-                  <AdvantageOpportunityCard opp={topOpp} selected={false} onSelect={() => router.push('/')} />
-                </div>
-                <div className="wiz-next">
-                  <span className="wiz-next-label">Next:</span>
-                  <Link href="/try" className="btn btn-primary btn-sm">Draft your first reply</Link>
-                  <Link href="/today" className="btn btn-ghost btn-sm">Go to Today</Link>
-                  <Link href="/pipeline" className="btn btn-ghost btn-sm">Find leads to contact</Link>
-                </div>
-              </>
-            ) : (
-              <>
-                <p className="wiz-sub">
-                  Your subs are scanned and on your watchlist. Opportunities populate as more
-                  posts come in — open the dashboard to explore what we found.
-                </p>
-                <Link href="/today" className="btn btn-primary">Open Today</Link>
-              </>
-            )}
+            <h1 className="wiz-h">First — how do you write?</h1>
+            <p className="wiz-sub">
+              Paste 2&ndash;3 of your own real Reddit replies. We use them as a style anchor so
+              your first draft sounds like you, not a bot. You can change these later in Settings.
+            </p>
+            <textarea
+              value={voiceText}
+              autoFocus
+              placeholder={
+                'Paste 2–3 of your own replies, separated by a blank line.\n\n' +
+                "The tool isn't the problem — intake is. Email's handled by anything; phone and text off a personal number is what nothing solves cleanly."
+              }
+              onChange={(e) => setVoiceText(e.target.value)}
+              rows={8}
+              disabled={savingVoice}
+              style={{
+                width: '100%',
+                resize: 'vertical',
+                font: 'inherit',
+                fontSize: 13,
+                lineHeight: 1.55,
+                color: 'var(--ink)',
+                background: 'var(--surface)',
+                border: '1px solid var(--border)',
+                borderRadius: 8,
+                padding: '10px 12px',
+                marginBottom: 18,
+              }}
+            />
+            <div className="wiz-actions" style={{ justifyContent: 'flex-start' }}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={handleVoiceContinue}
+                disabled={savingVoice}
+              >
+                {savingVoice ? <><Spinner size={14} /> Saving…</> : <>Continue <Icons.chev size={14} /></>}
+              </button>
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => setStep('reply')}
+                disabled={savingVoice}
+              >
+                Skip for now →
+              </button>
+            </div>
           </section>
+        )}
+
+        {step === 'reply' && (
+          <div className="fade-in">
+            <h1 className="wiz-h" style={{ textAlign: 'center' }}>Reply to your first buyer</h1>
+            <p className="wiz-sub" style={{ textAlign: 'center' }}>
+              Here&apos;s the hottest person asking for what you do, right now. Draft a reply in
+              your voice and you&apos;ve made your first move.
+            </p>
+
+            <HomeHero />
+
+            {topOpp && (
+              <section className="section" style={{ marginTop: 'var(--gap)' }}>
+                <div className="section-head">
+                  <h2>And here&apos;s what to build</h2>
+                  <span className="hint">your #1 opportunity, ranked by Advantage</span>
+                </div>
+                <div className="opp-grid">
+                  <AdvantageOpportunityCard opp={topOpp} selected={false} onSelect={() => router.push('/today?view=opportunities')} />
+                </div>
+              </section>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'center', marginTop: 28 }}>
+              <Link href="/today" className="btn btn-primary">Go to your home <Icons.chev size={14} /></Link>
+            </div>
+          </div>
         )}
       </div>
     </div>
   )
 }
 
-const STEP_ORDER: Step[] = ['niche', 'subs', 'scanning', 'result']
+const STEP_ORDER: Step[] = ['niche', 'subs', 'scanning', 'voice', 'reply']
 function stepIndex(step: Step): number {
   return STEP_ORDER.indexOf(step)
 }

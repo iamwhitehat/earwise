@@ -27,12 +27,13 @@ export async function PATCH(req: NextRequest, ctx: RouteContext<'/api/leads/[id]
   } catch {
     return Response.json({ error: 'Invalid JSON body' }, { status: 400 })
   }
-  const b = (body ?? {}) as { status?: unknown; notes?: unknown }
+  const b = (body ?? {}) as { status?: unknown; notes?: unknown; openerDraft?: unknown }
 
   const hasStatus = b.status !== undefined
   const hasNotes = b.notes !== undefined
-  if (!hasStatus && !hasNotes) {
-    return Response.json({ error: 'Nothing to update (provide status and/or notes)' }, { status: 400 })
+  const hasDraft = b.openerDraft !== undefined
+  if (!hasStatus && !hasNotes && !hasDraft) {
+    return Response.json({ error: 'Nothing to update (provide status, notes, and/or openerDraft)' }, { status: 400 })
   }
   if (hasStatus && !isValidStatus(b.status)) {
     return Response.json({ error: `Invalid status: ${String(b.status)}` }, { status: 400 })
@@ -53,6 +54,10 @@ export async function PATCH(req: NextRequest, ctx: RouteContext<'/api/leads/[id]
   if (hasNotes) {
     const notes = typeof b.notes === 'string' ? b.notes.trim().slice(0, NOTES_MAX) : ''
     patch.notes = notes.length > 0 ? notes : null
+  }
+  if (hasDraft) {
+    const draft = typeof b.openerDraft === 'string' ? b.openerDraft.slice(0, 8000) : ''
+    patch.opener_draft = draft.length > 0 ? draft : null
   }
 
   const projectId = await activeProjectId()

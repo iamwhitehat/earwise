@@ -80,6 +80,38 @@ export async function createProject(
   throw new Error('Could not allocate a unique project id')
 }
 
+/**
+ * Set a project's niche — the anchor that drives the relevance gate (so the
+ * Hot-now hero shows on-niche buyers, not junk). Upserts the default workspace
+ * row if it doesn't exist yet. Throws on a real DB error so the caller can
+ * surface a migration hint.
+ */
+export async function setProjectNiche(
+  db: SupabaseClient,
+  id: string,
+  niche: string,
+): Promise<Project> {
+  const value = normalizeNiche(niche)
+  if (id === DEFAULT_PROJECT_ID) {
+    const { data, error } = await db
+      .from('projects')
+      .upsert({ id, name: DEFAULT_PROJECT_RECORD.name, niche: value }, { onConflict: 'id' })
+      .select('id, name, niche, created_at')
+      .maybeSingle()
+    if (error) throw new Error(error.message)
+    return data ? mapRow(data as Row) : { ...DEFAULT_PROJECT_RECORD, niche: value }
+  }
+  const { data, error } = await db
+    .from('projects')
+    .update({ niche: value })
+    .eq('id', id)
+    .select('id, name, niche, created_at')
+    .maybeSingle()
+  if (error) throw new Error(error.message)
+  if (!data) throw new Error('Project not found')
+  return mapRow(data as Row)
+}
+
 /** Best-effort: ensure the default workspace row exists (idempotent). */
 export async function ensureDefaultProject(db: SupabaseClient): Promise<void> {
   const { error } = await db

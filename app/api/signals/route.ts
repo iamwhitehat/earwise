@@ -4,6 +4,7 @@ import { INTENT_TYPES, type IntentType } from '@/lib/intent-patterns'
 import { loadSignals, type SignalRow } from '@/lib/signals-db'
 import { gateSignals } from '@/lib/buyer-intent-db'
 import { activeProjectId } from '@/lib/project-server'
+import { canonicalTopic } from '@/lib/topics'
 
 const MAX_RESULTS = 100
 
@@ -25,6 +26,9 @@ export async function GET(req: NextRequest) {
   const sub = (url.searchParams.get('sub') ?? '').trim()
   const intentRaw = (url.searchParams.get('intent') ?? 'all').toLowerCase()
   const age = (url.searchParams.get('age') ?? 'week') as AgeWindow
+  // Optional canonical-topic filter (used by the "Act on this opportunity" link
+  // from Insights). Matched on the canonical form so raw-label variants resolve.
+  const topicTarget = canonicalTopic((url.searchParams.get('topic') ?? '').trim())
   const intent: IntentType | 'all' = (INTENT_TYPES as string[]).includes(intentRaw)
     ? (intentRaw as IntentType)
     : 'all'
@@ -48,7 +52,14 @@ export async function GET(req: NextRequest) {
 
   let signals: SignalRow[]
   try {
-    signals = await loadSignals(db, { sub: sub || undefined, intent, ageMs: ageMs(age) })
+    // topicTarget is filtered at the SQL level inside loadSignals so the
+    // per-source cap fills from this topic's rows (not a topic-blind window).
+    signals = await loadSignals(db, {
+      sub: sub || undefined,
+      intent,
+      ageMs: ageMs(age),
+      topicTarget,
+    })
   } catch (err) {
     console.error('[signals] query error:', err)
     return Response.json({ error: err instanceof Error ? err.message : 'Query failed' }, { status: 500 })

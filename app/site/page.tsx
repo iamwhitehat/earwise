@@ -1,6 +1,10 @@
 'use client'
 
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
+import Link from 'next/link'
+import { track } from '@vercel/analytics'
+import { ScanDemo } from '../_components/scan-demo'
+import { FAQS } from './faqs'
 import './earwise-site.css'
 
 // ── signal-burst mark ────────────────────────────────────────────────────────
@@ -38,36 +42,11 @@ const Arrow = () => (
   </svg>
 )
 
-const FAQS: { q: string; a: string }[] = [
-  {
-    q: 'What exactly does earwise do?',
-    a: 'It watches the subreddits where your buyers talk, reads and classifies every post (pain point, feature request, tool complaint), then rolls them into ranked opportunities, live trends, the exact phrases buyers use, and high-intent threads — each with a drafted reply. In short: it turns public demand into your next move.',
-  },
-  {
-    q: 'Is this just keyword alerts?',
-    a: 'No. Keyword alerts dump every mention in your lap. earwise reads intent — it tells you which threads actually signal demand, scores them, spots when a topic is heating up, and drafts a grounded reply. You get the move, not the noise.',
-  },
-  {
-    q: 'Where does the data come from?',
-    a: 'Public Reddit threads in the subreddits you choose to watch. Every insight links straight back to the source post, so you can always read the evidence yourself — nothing is invented or black-boxed.',
-  },
-  {
-    q: 'Will my replies look like spam?',
-    a: "Not if you use earwise the way it's built. Drafts are grounded in the person's actual post and written helpful-first. You always edit and post yourself — earwise gets you to a thoughtful first draft in seconds, it doesn't auto-blast anything.",
-  },
-  {
-    q: 'Do I need a big audience or budget?',
-    a: 'No. earwise is built for solo founders and small teams. Start on the free plan with three subreddits and your first scan runs in about a minute.',
-  },
-  {
-    q: 'Can I export what I find?',
-    a: 'Yes — signals, buyer language, and trends export to Markdown and CSV on Pro and above, so the insight lives wherever you already work.',
-  },
-]
-
 export default function EarwiseSite() {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
   const [scrolled, setScrolled] = useState(false)
+  const [showSticky, setShowSticky] = useState(false)
+  const [stickyDismissed, setStickyDismissed] = useState(false)
   const [openFaq, setOpenFaq] = useState(0)
   const rootRef = useRef<HTMLDivElement>(null)
 
@@ -93,9 +72,12 @@ export default function EarwiseSite() {
     })
   }
 
-  // nav shadow on scroll
+  // nav shadow + sticky-CTA visibility on scroll (CTA appears once past the hero)
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 12)
+    const onScroll = () => {
+      setScrolled(window.scrollY > 12)
+      setShowSticky(window.scrollY > window.innerHeight * 0.9)
+    }
     onScroll()
     window.addEventListener('scroll', onScroll, { passive: true })
     return () => window.removeEventListener('scroll', onScroll)
@@ -133,8 +115,8 @@ export default function EarwiseSite() {
             <a href="#how">How it works</a>
             <a href="#features">Features</a>
             <a href="#mission">Mission</a>
-            <a href="#pricing">Pricing</a>
             <a href="#faq">FAQ</a>
+            <a href="#pricing">Pricing</a>
           </nav>
           <div className="nav-cta">
             <button
@@ -152,9 +134,9 @@ export default function EarwiseSite() {
                 <path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M19.1 4.9l-1.8 1.8M6.7 17.3l-1.8 1.8" />
               </svg>
             </button>
-            <a href="#" className="signin">Sign in</a>
-            <a href="#pricing" className="btn btn-lime btn-sm">
-              Start free
+            <Link href="/login" className="signin">Sign in</Link>
+            <a href="#try" className="btn btn-lime btn-sm">
+              Scan free
               <Arrow />
             </a>
           </div>
@@ -167,105 +149,27 @@ export default function EarwiseSite() {
         <div className="hero-grid" />
         <div className="wrap hero-in">
           <span className="pill"><b>NEW</b> Reply to high-intent threads the same day they post</span>
-          <h1>The market is <span className="sig">broadcasting.</span> Catch it first.</h1>
+          <h1>See who&apos;s asking to buy what you sell — <span className="sig">right now.</span></h1>
           <p className="hero-sub">
-            earwise is demand intelligence for founders. It reads where your buyers actually talk,
-            surfaces the demand they&apos;re asking for out loud — and the exact threads you can win today.
+            earwise scans Reddit, Hacker News &amp; StackOverflow for people actively looking for what
+            you offer — and drafts a reply in your voice. Type your niche and watch it happen, free.
           </p>
-          <div className="hero-cta">
-            <a href="#pricing" className="btn btn-lime">
-              Start free — first scan in 60s
-              <Arrow />
-            </a>
-            <a href="#how" className="btn btn-ghost">See how it works</a>
+          {/* The live demo IS the hero — type a niche, get real buyers + a drafted reply. */}
+          <div id="try" style={{ maxWidth: 640, margin: '26px auto 0' }}>
+            <ScanDemo />
           </div>
           <div className="hero-trust">
-            <span><span className="ck">✓</span> No credit card</span>
-            <span><span className="ck">✓</span> Every post cited to the real thread</span>
-            <span><span className="ck">✓</span> Built for solo founders &amp; small teams</span>
+            <span><span className="ck">✓</span> No signup, no card</span>
+            <span><span className="ck">✓</span> Real Reddit threads, cited</span>
+            <span><span className="ck">✓</span> <a href="#how" style={{ color: 'inherit' }}>See how it works ↓</a></span>
           </div>
 
-          {/* product visual */}
-          <div className="shot">
-            <div className="shot-frame">
-              <div className="shot-bar"><i /><i /><i /><span className="url">earwise.io / signals</span></div>
-              <div className="app-body">
-                <aside className="side">
-                  <div className="s-brand">
-                    <span className="s-mark"><BurstMark size={17} c="#0E0F13" outer="#0E0F13" sw={18} /></span>
-                    <span className="s-name">earwise</span>
-                  </div>
-                  <div className="s-item">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></svg>
-                    Dashboard
-                  </div>
-                  <div className="s-item">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9" /><polygon points="15.5 8.5 10.5 10.5 8.5 15.5 13.5 13.5" /></svg>
-                    Explore
-                  </div>
-                  <div className="s-item">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M6 6l2 2M16 16l2 2M18 6l-2 2M8 16l-2 2" /><circle cx="12" cy="12" r="3" /></svg>
-                    Insights
-                  </div>
-                  <div className="s-item">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
-                    Buyer Language
-                  </div>
-                  <div className="s-item active">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="13 2 3 14 11 14 11 22 21 10 13 10" /></svg>
-                    Signals
-                  </div>
-                  <div className="s-item">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 12h-6l-2 3h-4l-2-3H2" /><path d="M5 7l-3 5v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3-5z" /></svg>
-                    Leads
-                  </div>
-                  <div className="s-label">Watchlist · 4</div>
-                  <div className="s-row"><span className="wdot" />r/SaaS<span className="n">38</span></div>
-                  <div className="s-row"><span className="wdot" />r/startups<span className="n">26</span></div>
-                  <div className="s-row"><span className="wdot" />r/Entrepreneur<span className="n">19</span></div>
-                  <div className="s-foot">
-                    <button className="s-scan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4-4" /></svg>Scan for new</button>
-                  </div>
-                </aside>
-                <div className="work">
-                  <div className="work-top"><div className="work-h">Signals</div><div className="work-sub">12 high-intent · last 7d</div></div>
-                  <div className="sig-card">
-                    <div className="sig-score">94<small>SCORE</small></div>
-                    <div className="sig-body">
-                      <div className="sig-meta">r/SaaS · 2h ago · 47 upvotes · 31 comments</div>
-                      <p className="sig-title">&quot;Anyone found a tool that pulls buyer language straight from Reddit threads? Tired of guessing.&quot;</p>
-                      <div className="sig-tags"><span className="sig-tag spike">▲ spiking</span><span className="sig-tag">pain point</span><span className="sig-tag">high intent</span></div>
-                    </div>
-                    <button className="sig-reply">Draft reply</button>
-                  </div>
-                  <div className="sig-card">
-                    <div className="sig-score">88<small>SCORE</small></div>
-                    <div className="sig-body">
-                      <div className="sig-meta">r/startups · 5h ago · 33 upvotes · 22 comments</div>
-                      <p className="sig-title">&quot;What are you all using to track demand before you build? Surveys feel useless.&quot;</p>
-                      <div className="sig-tags"><span className="sig-tag spike">▲ spiking</span><span className="sig-tag">feature request</span><span className="sig-tag">open lane</span></div>
-                    </div>
-                    <button className="sig-reply">Draft reply</button>
-                  </div>
-                  <div className="sig-card">
-                    <div className="sig-score mid">76<small>SCORE</small></div>
-                    <div className="sig-body">
-                      <div className="sig-meta">r/Entrepreneur · 8h ago · 28 upvotes · 17 comments</div>
-                      <p className="sig-title">&quot;Is there something that watches subreddits and tells me what people actually want?&quot;</p>
-                      <div className="sig-tags"><span className="sig-tag">tool complaint</span><span className="sig-tag">high intent</span></div>
-                    </div>
-                    <button className="sig-reply">Draft reply</button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
       </section>
 
       {/* ============ LOGO CLOUD ============ */}
       <section className="cloud wrap">
-        <p>Where founders are already listening</p>
+        <p className="cloud-wedge">Like <b>GummySearch</b> for Reddit demand — but earwise finds the buyer <strong>and</strong> drafts the reply.</p>
         <div className="cloud-row">
           {['r/SaaS', 'r/startups', 'r/Entrepreneur', 'r/indiehackers', 'r/SideProject', 'r/marketing'].map((s) => (
             <span key={s} className="cloud-logo"><span className="ph" />{s}</span>
@@ -475,63 +379,7 @@ export default function EarwiseSite() {
         </div>
       </section>
 
-      {/* ============ PRICING ============ */}
-      <section className="sec" id="pricing">
-        <div className="wrap">
-          <div className="sec-head center reveal">
-            <span className="kicker center">Pricing</span>
-            <h2 className="h2">Start free. Upgrade when the signal pays for itself.</h2>
-            <p className="lead" style={{ margin: '0 auto' }}>One winning reply covers it. Cancel anytime — your watchlist and exports come with you.</p>
-          </div>
-          <div className="price-grid">
-            <div className="price reveal">
-              <div className="price-name">Starter</div>
-              <div className="price-desc">For testing the waters and your first validation sprint.</div>
-              <div className="price-amt"><span className="n">$0</span><span className="per">/ forever</span></div>
-              <div className="price-note">no card required</div>
-              <a href="#" className="btn btn-ghost">Start free</a>
-              <ul className="price-feats">
-                <li>3 watched subreddits</li>
-                <li>Weekly scans</li>
-                <li>Signals &amp; opportunity scores</li>
-                <li className="off">Buyer-language mining</li>
-                <li className="off">AI-drafted replies</li>
-              </ul>
-            </div>
-            <div className="price pop reveal">
-              <span className="price-pop-tag">Most popular</span>
-              <div className="price-name">Pro</div>
-              <div className="price-desc">For founders actively hunting demand and replying daily.</div>
-              <div className="price-amt"><span className="n">$39</span><span className="per">/ month</span></div>
-              <div className="price-note">billed monthly · or $29/mo yearly</div>
-              <a href="#" className="btn btn-lime">Start 14-day trial</a>
-              <ul className="price-feats">
-                <li>25 watched subreddits</li>
-                <li>Daily scans + spike alerts</li>
-                <li>Full buyer-language mining</li>
-                <li>AI-drafted replies &amp; openers</li>
-                <li>Markdown / CSV export</li>
-              </ul>
-            </div>
-            <div className="price reveal">
-              <div className="price-name">Scale</div>
-              <div className="price-desc">For teams running demand intel as a channel.</div>
-              <div className="price-amt"><span className="n">$99</span><span className="per">/ month</span></div>
-              <div className="price-note">billed monthly · 3 seats included</div>
-              <a href="#" className="btn btn-ghost">Talk to us</a>
-              <ul className="price-feats">
-                <li>Unlimited subreddits</li>
-                <li>Hourly scans + real-time alerts</li>
-                <li>Team seats &amp; shared lanes</li>
-                <li>Advanced scoring &amp; trends</li>
-                <li>API access</li>
-              </ul>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ============ FAQ ============ */}
+      {/* ============ FAQ (before pricing — deflate objections before the ask) ===== */}
       <section className="sec" id="faq">
         <div className="wrap">
           <div className="sec-head center reveal">
@@ -556,6 +404,62 @@ export default function EarwiseSite() {
         </div>
       </section>
 
+      {/* ============ PRICING ============ */}
+      <section className="sec" id="pricing">
+        <div className="wrap">
+          <div className="sec-head center reveal">
+            <span className="kicker center">Pricing</span>
+            <h2 className="h2">Start free. Upgrade when the signal pays for itself.</h2>
+            <p className="lead" style={{ margin: '0 auto' }}>One winning reply covers it. Cancel anytime — your watchlist and exports come with you.</p>
+          </div>
+          <div className="price-grid">
+            <div className="price reveal">
+              <div className="price-name">Starter</div>
+              <div className="price-desc">For testing the waters and your first validation sprint.</div>
+              <div className="price-amt"><span className="n">$0</span><span className="per">/ forever</span></div>
+              <div className="price-note">no card required</div>
+              <Link href="/login" className="btn btn-ghost">Start free</Link>
+              <ul className="price-feats">
+                <li>3 watched subreddits</li>
+                <li>Weekly scans</li>
+                <li>Signals &amp; opportunity scores</li>
+                <li className="off">Buyer-language mining</li>
+                <li className="off">AI-drafted replies</li>
+              </ul>
+            </div>
+            <div className="price pop reveal">
+              <span className="price-pop-tag">Most popular</span>
+              <div className="price-name">Pro</div>
+              <div className="price-desc">For founders actively hunting demand and replying daily.</div>
+              <div className="price-amt"><span className="n">$39</span><span className="per">/ month</span></div>
+              <div className="price-note">billed monthly · or $29/mo yearly</div>
+              <Link href="/login?plan=pro" className="btn btn-lime">Start 14-day trial</Link>
+              <ul className="price-feats">
+                <li>25 watched subreddits</li>
+                <li>Daily scans + spike alerts</li>
+                <li>Full buyer-language mining</li>
+                <li>AI-drafted replies &amp; openers</li>
+                <li>Markdown / CSV export</li>
+              </ul>
+            </div>
+            <div className="price reveal">
+              <div className="price-name">Scale</div>
+              <div className="price-desc">For teams running demand intel as a channel.</div>
+              <div className="price-amt"><span className="n">$99</span><span className="per">/ month</span></div>
+              <div className="price-note">billed monthly · 3 seats included</div>
+              <Link href="/login" className="btn btn-ghost">Talk to us</Link>
+              <ul className="price-feats">
+                <li>Unlimited subreddits</li>
+                <li>Hourly scans + real-time alerts</li>
+                <li>Team seats &amp; shared lanes</li>
+                <li>Advanced scoring &amp; trends</li>
+                <li>API access</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* ============ FINAL CTA ============ */}
       <section className="cta">
         <div className="cta-glow" />
@@ -564,11 +468,11 @@ export default function EarwiseSite() {
           <h2>Your buyers are talking <span className="sig">right now.</span></h2>
           <p>Point earwise at them and see the demand within a minute. Free to start, no card.</p>
           <div className="hero-cta">
-            <a href="#" className="btn btn-lime">
-              Catch the signal first
+            <Link href="/scan" className="btn btn-lime">
+              Scan your niche free
               <Arrow />
-            </a>
-            <a href="#how" className="btn btn-ghost">See how it works</a>
+            </Link>
+            <Link href="/login" className="btn btn-ghost">Create account</Link>
           </div>
         </div>
       </section>
@@ -602,10 +506,10 @@ export default function EarwiseSite() {
             </div>
             <div className="foot-col">
               <h4>Get started</h4>
-              <a href="#pricing">Start free</a>
-              <a href="#">Sign in</a>
-              <a href="#">Book a demo</a>
-              <a href="#">Contact</a>
+              <Link href="/scan">Free scan</Link>
+              <Link href="/login">Sign in</Link>
+              <a href="#pricing">Pricing</a>
+              <a href="mailto:hello@earwise.io">Contact</a>
             </div>
           </div>
           <div className="foot-bot">
@@ -614,6 +518,18 @@ export default function EarwiseSite() {
           </div>
         </div>
       </footer>
+
+      {/* Sticky CTA — appears once the visitor scrolls past the hero/demo. */}
+      {!stickyDismissed && (
+        <div className={`sticky-cta${showSticky ? ' show' : ''}`}>
+          <p>See every buyer in your niche — plus a fresh batch every day.</p>
+          <Link href="/login" className="btn btn-lime btn-sm" onClick={() => track('signup_click', { from: 'sticky' })}>
+            Create free account
+            <Arrow />
+          </Link>
+          <button className="sticky-dismiss" aria-label="Dismiss" onClick={() => setStickyDismissed(true)}>×</button>
+        </div>
+      )}
     </div>
   )
 }

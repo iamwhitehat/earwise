@@ -21,6 +21,13 @@ End with at most one sharp, specific question or a clean offer — sometimes non
 
 Output ONLY the message text. No preamble, no quotes, no commentary.`
 
+// Variant for the public landing demo: same voice, hard brevity cap. The demo
+// reply is the first thing a visitor reads, so it has to land fast — not sprawl
+// into a multi-paragraph essay.
+export const PERSONA_SYSTEM_PROMPT_SHORT = `${PERSONA_SYSTEM_PROMPT}
+
+Keep THIS one short: two or three sentences, maximum. The first line has to land. No build-up, no second example, no sign-off.`
+
 // Higher temperature than the bulk classifiers: we want range, not consistency.
 export const DRAFT_TEMPERATURE = 0.9
 

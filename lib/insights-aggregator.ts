@@ -443,8 +443,12 @@ export function renderAggregatedForClaude(data: AggregatedInsightsData): string 
     lines.push('Cite these exact numbers in `demand` and quote the evidence with its permalink.')
     lines.push('')
     for (const o of data.opportunities) {
+      // Topic label on its OWN line (no metadata suffix) so the model can copy
+      // it verbatim into `topics` for the back-link to source posts. Demand /
+      // momentum / sources metadata goes on the following line.
+      lines.push(`### ${o.topic}`)
       lines.push(
-        `### ${o.topic} — demand: ${o.posts} posts, ${o.uniqueAuthors} unique authors, ` +
+        `demand: ${o.posts} posts, ${o.uniqueAuthors} unique authors, ` +
           `engagement ${o.engagement}; momentum: ${o.momentum}` +
           (o.weeklyCounts.length > 0 ? ` (weekly: ${o.weeklyCounts.join(' → ')})` : '') +
           `; subs: ${o.subreddits.slice(0, 6).map((s) => `r/${s}`).join(', ')}` +

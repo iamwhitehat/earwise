@@ -7,14 +7,16 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
-// Public page surfaces: sign-in, the OAuth callback, the marketing/demo site.
-const PUBLIC_PAGE_PREFIXES = ['/login', '/auth', '/site']
+// Public page surfaces: sign-in, the OAuth callback, the marketing/demo site,
+// and the no-signup instant-scan funnel.
+const PUBLIC_PAGE_PREFIXES = ['/login', '/auth', '/site', '/scan']
 // /api routes that bypass the SESSION gate — each enforces its own access:
 //   /api/projects/demo → public demo seeder (free, makes no model calls)
 //   /api/cron/run      → scheduled job, auth'd by CRON_SECRET. Vercel Cron has
 //                        no Supabase session, so the session gate can't apply;
 //                        the route's own secret check is its access control.
-const UNGATED_API_PREFIXES = ['/api/projects/demo', '/api/cron/run']
+//   /api/public/scan   → public instant-scan funnel; self-limits per-IP daily.
+const UNGATED_API_PREFIXES = ['/api/projects/demo', '/api/cron/run', '/api/public/scan']
 
 function matchesPrefix(path: string, prefixes: string[]): boolean {
   return prefixes.some((p) => path === p || path.startsWith(`${p}/`))
@@ -51,9 +53,11 @@ export async function proxy(request: NextRequest) {
         return NextResponse.json({ error: 'Authentication required.' }, { status: 401 })
       }
     } else if (!matchesPrefix(path, PUBLIC_PAGE_PREFIXES)) {
-      const loginUrl = request.nextUrl.clone()
-      loginUrl.pathname = '/login'
-      return NextResponse.redirect(loginUrl)
+      const dest = request.nextUrl.clone()
+      // Unauthenticated root → the public marketing landing (the indexable
+      // homepage + funnel entry); every other gated page → sign-in.
+      dest.pathname = path === '/' ? '/site' : '/login'
+      return NextResponse.redirect(dest)
     }
   }
 

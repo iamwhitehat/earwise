@@ -1,6 +1,8 @@
 import type { NextRequest } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
-import { extractCommentInsights, type CommentQuote } from '@/lib/claude'
+import { activeProjectId } from '@/lib/project-server'
+import { gateUsage } from '@/lib/usage-credits-db'
+import { extractCommentInsights, PRIORITY, type CommentQuote } from '@/lib/claude'
 import { COMMENT_SAMPLE_CAP } from '@/lib/scan-types'
 import { parseCommentEntries } from '@/lib/reddit-parse'
 
@@ -32,13 +34,20 @@ export async function POST(req: NextRequest) {
   } catch {
     return Response.json({ error: 'Invalid JSON body' }, { status: 400 })
   }
-  const { subreddit, postId } = (body ?? {}) as { subreddit?: unknown; postId?: unknown }
+  const { subreddit, postId, foreground } = (body ?? {}) as {
+    subreddit?: unknown
+    postId?: unknown
+    foreground?: unknown
+  }
   if (typeof subreddit !== 'string' || !isValidSub(subreddit)) {
     return Response.json({ error: 'Invalid subreddit' }, { status: 400 })
   }
   if (typeof postId !== 'string' || !isValidPostId(postId)) {
     return Response.json({ error: 'Invalid postId' }, { status: 400 })
   }
+  // A single "Deep scan" click is foreground (user waiting on one post); the
+  // bulk deep-scan loop omits the flag and stays BULK so it yields to clicks.
+  const priority = foreground === true ? PRIORITY.FOREGROUND : PRIORITY.BULK
 
   let db
   try {
@@ -49,6 +58,10 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     )
   }
+
+  // Usage-credit gate (margin guard) — deep-scan is the per-post cost driver.
+  const over = await gateUsage(db, await activeProjectId(), 'deepScanPost')
+  if (over) return over
 
   // 1. Look up the post; refuse if missing or category === 'other' (cost guard).
   const { data: postRow, error: postErr } = await db
@@ -109,7 +122,13 @@ export async function POST(req: NextRequest) {
   //    Same call also returns per-comment classifications (pain/feature/tool/other).
   const insights =
     comments.length > 0
-      ? await extractCommentInsights(postRow.title as string, comments.map((c) => ({ body: c.body })))
+      ? // FOREGROUND for a single user-waited click; BULK for the bulk loop, so
+        // it yields to clicks like "Load more" and single deep-scans.
+        await extractCommentInsights(
+          postRow.title as string,
+          comments.map((c) => ({ body: c.body })),
+          priority,
+        )
       : { tools: [] as string[], quotes: [] as CommentQuote[], classifications: [] as Array<{ index: number; category: string }> }
 
   // 4b. Persist per-comment categories. Indices in the Claude response are

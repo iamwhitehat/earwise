@@ -1875,3 +1875,80 @@ a.accent-link:focus-visible {
     scroll-behavior: auto !important;
   }
 }
+
+/* ===== Daily Brief (spec §6.2) — §4 design tokens, scoped to this screen only.
+   The rest of the app keeps its current theme until the global migration. ===== */
+.db-root {
+  --db-card: #181c18;
+  --db-border: #262c26;
+  --db-lime: #c8f032;
+  --db-lime-d: #9bbf28;
+  --db-text: #f2f4ef;
+  --db-muted: #7e857e;
+  --db-dim: #565c56;
+  max-width: 720px;
+  font-family: 'Space Grotesk', var(--font-sans, system-ui), sans-serif;
+  color: var(--db-text);
+}
+.db-loading {
+  display: flex; align-items: center; gap: 10px;
+  color: var(--db-muted); font-size: 13.5px; padding: 32px 4px;
+}
+.db-head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 16px; margin-bottom: 20px;
+}
+.db-h { font-size: 24px; font-weight: 700; letter-spacing: -0.5px; }
+.db-sub { font-size: 13.5px; color: var(--db-muted); margin-top: 3px; }
+.db-streak {
+  font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px;
+  color: var(--db-lime); background: #161a13; border: 1px solid var(--db-lime-d);
+  border-radius: 999px; padding: 6px 14px; white-space: nowrap; flex-shrink: 0;
+}
+.db-task {
+  display: flex; align-items: center; gap: 14px; padding: 15px 17px;
+  background: var(--db-card); border: 1px solid var(--db-border);
+  border-radius: 12px; margin-bottom: 10px;
+}
+.db-box {
+  width: 24px; height: 24px; border-radius: 7px; border: 2px solid var(--db-lime-d);
+  flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+  color: var(--db-lime); font-size: 13px; font-weight: 800;
+  font-family: 'JetBrains Mono', ui-monospace, monospace; background: none; cursor: pointer;
+}
+.db-box.done { background: var(--db-lime); color: #0a0c0a; border-color: var(--db-lime); cursor: default; }
+.db-txt { flex: 1; font-size: 14.5px; min-width: 0; }
+.db-txt b { font-weight: 600; }
+.db-txt span { color: var(--db-muted); font-size: 12.5px; font-family: 'JetBrains Mono', ui-monospace, monospace; }
+.db-go {
+  font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px; color: var(--db-lime);
+  border: 1px solid var(--db-lime-d); border-radius: 8px; padding: 8px 13px;
+  cursor: pointer; background: none; white-space: nowrap;
+}
+.db-go.dn { color: var(--db-dim); border-color: var(--db-border); cursor: default; }
+.db-done {
+  text-align: center; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12.5px;
+  color: var(--db-muted); margin-top: 16px; padding: 14px; border: 1px dashed var(--db-border);
+  border-radius: 10px;
+}
+.db-done b { color: var(--db-lime); }
+
+/* ===== Sidebar stage toggle (spec §5) — Demand ⇄ Distribution ===== */
+.stage-tg {
+  background: var(--side-bg-2); border: 1px solid var(--side-border);
+  border-radius: 11px; padding: 5px; margin: 12px 0 14px;
+}
+.stage-t {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  width: 100%; padding: 8px 9px; border: none; background: none;
+  border-radius: 8px; text-align: center; color: var(--side-ink-2);
+  cursor: pointer; margin-bottom: 3px; font-family: inherit;
+}
+.stage-t:last-child { margin-bottom: 0; }
+.stage-t.on { background: var(--accent); color: var(--on-signal); }
+.stage-t-name { display: block; font-size: 12.5px; font-weight: 600; }
+.stage-t.on .stage-t-name { font-weight: 700; }
+.stage-x {
+  display: block; font-size: 8.5px; font-family: var(--font-geist-mono), monospace;
+  opacity: 0.7; margin-top: 2px; letter-spacing: 0.3px;
+}

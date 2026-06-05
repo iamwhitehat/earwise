@@ -30,9 +30,18 @@ describe('makerPreflag', () => {
     expect(makerPreflag('we are looking for beta testers')).toBe(true)
     expect(makerPreflag('my startup helps with onboarding')).toBe(true)
   })
+  it('flags showcase conventions: Showoff Saturday / Show HN / [OC] / just-shipped / author-of / feedback-welcome', () => {
+    expect(makerPreflag("[Showoff Saturday] Prose reader — Hey everyone, I'm the author of prose, an MIT SDK")).toBe(true)
+    expect(makerPreflag('Show HN: my new side project')).toBe(true)
+    expect(makerPreflag('[OC] a tool I put together for invoicing')).toBe(true)
+    expect(makerPreflag('just shipped my reader engine, would love thoughts')).toBe(true)
+    expect(makerPreflag("I'm the creator of a small library for this")).toBe(true)
+    expect(makerPreflag('Built a thing for parsing. Feedback welcome!')).toBe(true)
+  })
   it('does NOT flag a genuine buyer asking for a tool', () => {
     expect(makerPreflag('Looking for an AI tool to auto-triage our support tickets — any recs?')).toBe(false)
     expect(makerPreflag("We're drowning in Zendesk tickets, what do you use?")).toBe(false)
+    expect(makerPreflag('Anyone know a good way to handle invoicing? Tired of doing it by hand.')).toBe(false)
   })
 })
 

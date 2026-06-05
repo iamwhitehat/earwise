@@ -1,5 +1,6 @@
 import type { NextRequest } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
+import { gateUsage } from '@/lib/usage-credits-db'
 import { draftOpener } from '@/lib/claude'
 import { mapLeadRow } from '@/lib/leads'
 import {
@@ -100,6 +101,10 @@ export async function POST(req: NextRequest, ctx: RouteContext<'/api/leads/[id]/
   const guidance = await loadWhatWorkedGuidance(db, projectId)
   const voiceSamples = await loadVoiceSamples(db, projectId)
   const voiceBrief = (await loadVoiceBrief(db, projectId))?.brief ?? null
+
+  // Usage-credit gate (margin guard) — this is the generate path (Haiku draft).
+  const over = await gateUsage(db, projectId, 'draft')
+  if (over) return over
 
   const opener = await draftOpener({
     author: lead.author,
