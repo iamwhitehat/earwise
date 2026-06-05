@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react'
 // synthesis model tier used by the Insights + Buyer Language refresh runs.
 // Bulk classification always uses Haiku and is NOT affected by this.
 
-const STORAGE_KEY = 'reddit-reader:synth-tier'
+const STORAGE_KEY = 'earwise:synth-tier'
 
 export const SYNTH_TIERS = ['fast', 'balanced', 'max'] as const
 export type SynthTier = (typeof SYNTH_TIERS)[number]

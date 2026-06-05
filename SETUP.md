@@ -74,7 +74,7 @@ no-ops (returns null) when the key is absent.
 ### 2a. Create the project
 
 1. Go to https://supabase.com → sign in → **New project**.
-2. Name it (e.g. `reddit-reader`), pick a region close to you, set a database
+2. Name it (e.g. `earwise`), pick a region close to you, set a database
    password (you won't need it again for this app), click **Create new project**.
 3. Wait ~1 minute for provisioning.
 
@@ -722,7 +722,7 @@ npm run build:exe
 ```
 
 This runs `next build`, stages `public/`, `.next/static/`, and `.env.local` into
-`.next/standalone/`, then regenerates `reddit-reader.exe` (Node SEA + postject).
+`.next/standalone/`, then regenerates `earwise.exe` (Node SEA + postject).
 The `.next/standalone/` directory must stay next to the exe. Source edits are
 **not** picked up by the exe until you re-run `build:exe`.
 
@@ -797,7 +797,7 @@ When set, callers must pass `Authorization: Bearer <CRON_SECRET>` (or
 ```
 RESEND_API_KEY=re_...          # https://resend.com
 DIGEST_EMAIL_TO=you@example.com
-DIGEST_EMAIL_FROM=RedditRadar <onboarding@resend.dev>   # optional
+DIGEST_EMAIL_FROM=earwise <onboarding@resend.dev>   # optional
 ```
 
 Leave them unset and email is skipped silently.

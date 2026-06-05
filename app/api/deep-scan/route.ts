@@ -7,7 +7,7 @@ import { COMMENT_SAMPLE_CAP } from '@/lib/scan-types'
 import { parseCommentEntries } from '@/lib/reddit-parse'
 
 const REDDIT_HEADERS = {
-  'User-Agent': 'web:reddit-reader-app:v1.0 (by /u/anonymous)',
+  'User-Agent': 'web:earwise-app:v1.0 (by /u/anonymous)',
   Accept: 'application/atom+xml,application/xml',
 }
 

@@ -10,7 +10,7 @@ import { Analytics } from "@vercel/analytics/next";
 // hydrates so the page never flashes the wrong theme. earwise is dark-first —
 // default to dark unless the user has explicitly chosen light. Kept in a string
 // so the layout stays a Server Component.
-const THEME_INIT_SCRIPT = `(function(){try{var t=localStorage.getItem('reddit-reader:theme');if(t!=='light'){document.documentElement.setAttribute('data-theme','dark');}}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();`;
+const THEME_INIT_SCRIPT = `(function(){try{var t=localStorage.getItem('earwise:theme');if(t!=='light'){document.documentElement.setAttribute('data-theme','dark');}}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();`;
 
 // Earwise spec §4.2 type: Space Grotesk (display/body) + JetBrains Mono (data).
 // Kept on the existing --font-geist-* variable names so every component that

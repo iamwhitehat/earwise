@@ -10,7 +10,7 @@ import { parseAtom } from '../reddit-parse'
 import type { RawSignal, SourceConnector } from './types'
 
 const REDDIT_HEADERS = {
-  'User-Agent': 'web:reddit-reader-app:v1.0 (by /u/anonymous)',
+  'User-Agent': 'web:earwise-app:v1.0 (by /u/anonymous)',
   Accept: 'application/atom+xml,application/xml',
 }
 

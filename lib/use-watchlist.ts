@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 
-const STORAGE_KEY = 'reddit-reader:watchlist'
+const STORAGE_KEY = 'earwise:watchlist'
 
 /**
  * Pre-curated watchlist starting points. The first preset is also the

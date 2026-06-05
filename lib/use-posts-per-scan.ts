@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 
-const STORAGE_KEY = 'reddit-reader:posts-per-scan'
+const STORAGE_KEY = 'earwise:posts-per-scan'
 
 export const POSTS_PER_SCAN_OPTIONS = [25, 50, 100, 200] as const
 export type PostsPerScan = (typeof POSTS_PER_SCAN_OPTIONS)[number]

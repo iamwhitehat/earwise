@@ -47,7 +47,7 @@ function isAbortError(err: unknown): boolean {
 // confirmation. Throttled so rapid re-scans don't repeatedly hit the connectors;
 // a 402 (over usage budget) or any error just skips HN/SO this round.
 const DIVERSIFY_COOLDOWN_MS = 30 * 60 * 1000
-const DIVERSIFY_KEY = 'reddit-reader:last-diversify'
+const DIVERSIFY_KEY = 'earwise:last-diversify'
 
 function maybeDiversifySources(subs: string[]): void {
   if (subs.length === 0) return

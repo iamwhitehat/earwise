@@ -11,7 +11,7 @@ function config(): { key: string; to: string; from: string } | null {
   const key = process.env.RESEND_API_KEY
   const to = process.env.DIGEST_EMAIL_TO
   if (!key || key.includes('REPLACE_WITH_YOUR') || !to) return null
-  const from = process.env.DIGEST_EMAIL_FROM || 'RedditRadar <onboarding@resend.dev>'
+  const from = process.env.DIGEST_EMAIL_FROM || 'earwise <onboarding@resend.dev>'
   return { key, to, from }
 }
 

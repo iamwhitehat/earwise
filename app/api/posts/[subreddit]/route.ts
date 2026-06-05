@@ -86,7 +86,7 @@ function parseLimit(raw: string | null): number {
 }
 
 const REDDIT_HEADERS = {
-  'User-Agent': 'web:reddit-reader-app:v1.0 (by /u/anonymous)',
+  'User-Agent': 'web:earwise-app:v1.0 (by /u/anonymous)',
   'Accept': 'application/atom+xml,application/xml',
 }
 

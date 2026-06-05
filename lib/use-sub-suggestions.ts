@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 
-const STORAGE_KEY = 'reddit-reader:sub-suggestions'
+const STORAGE_KEY = 'earwise:sub-suggestions'
 
 type Cache = Record<string, string[]>
 

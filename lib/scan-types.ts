@@ -4,7 +4,7 @@ import { whitespaceFromCounts, type WhitespaceCounts } from './whitespace'
 
 export const PER_SUB_CAP = 500
 export const DONE_FLASH_MS = 1000
-export const LAST_SCAN_STORAGE_KEY = 'reddit-reader:last-scan-at'
+export const LAST_SCAN_STORAGE_KEY = 'earwise:last-scan-at'
 
 // Deep scan pulls top-level comments via Reddit's Atom RSS feed, capped at
 // this many entries — Reddit's anonymous .json endpoint started returning 403
