@@ -271,3 +271,12 @@ create table if not exists project_usage (
   credits_used int  not null default 0,
   reset_at     timestamptz not null default (now() + interval '30 days')
 );
+
+-- ── Phase 2: within-source normalized engagement (score_norm) ──────────────────
+-- Percentile rank (0..1) of a signal's engagement within its OWN source's recent
+-- distribution, so Reddit upvotes / HN points / SO scores become comparable. Set
+-- at ingest (lib/sources/ingest.ts) and backfilled by recomputeScoreNorm(). The
+-- hot path reads ONLY this normalized value for cross-source engagement.
+alter table signals add column if not exists score_norm numeric;
+create index if not exists signals_score_norm_idx
+  on signals (source, score_norm desc) where score_norm is not null;

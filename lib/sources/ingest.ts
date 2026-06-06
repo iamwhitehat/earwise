@@ -9,8 +9,8 @@ import { classifyAndExtractBatch, CLASSIFY_BATCH_SIZE, PRIORITY } from '../claud
 import { canonicalTopic } from '../topics'
 import { postDedupeKey } from '../dedup'
 import { embedTexts, cosineSimilarity } from '../embeddings'
-import { rawEngagement, percentileRank, DEFAULT_SCORE_NORM_WINDOW_DAYS } from '../score-norm'
-import { CONNECTORS, type RawSignal } from './index'
+import { rawEngagement, percentileRank, percentilesOf, DEFAULT_SCORE_NORM_WINDOW_DAYS } from '../score-norm'
+import { CONNECTORS, LIVE_SOURCE_IDS, type RawSignal } from './index'
 
 const MAX_NEW_PER_RUN = 60 // cap classification cost/latency per run
 const KNOWN_TOPICS_CAP = 300
@@ -245,6 +245,49 @@ async function loadExistingKeys(
 async function signalsHasScoreNorm(db: SupabaseClient): Promise<boolean> {
   const { error } = await db.from('signals').select('score_norm').limit(1)
   return !error
+}
+
+/**
+ * Backfill/recompute score_norm for ALL stored signals, per source, over the
+ * trailing window — recalibrating as the distribution shifts. Idempotent and
+ * best-effort (no-op until the column is migrated). Grouped UPDATEs (one per
+ * distinct percentile value, of which there are few thanks to ties) keep it cheap.
+ */
+export async function recomputeScoreNorm(
+  db: SupabaseClient,
+): Promise<{ updated: number; bySource: Record<string, number> }> {
+  const bySource: Record<string, number> = {}
+  if (!(await signalsHasScoreNorm(db))) return { updated: 0, bySource }
+  const cutoffIso = new Date(Date.now() - DEFAULT_SCORE_NORM_WINDOW_DAYS * 86_400_000).toISOString()
+  let updated = 0
+  for (const src of LIVE_SOURCE_IDS) {
+    const { data, error } = await db
+      .from('signals')
+      .select('id, score, num_comments')
+      .eq('source', src)
+      .gte('ingested_at', cutoffIso)
+      .limit(5000)
+    if (error || !data || data.length === 0) continue
+    const raws = data.map((r) =>
+      rawEngagement({ score: (r.score as number | null) ?? undefined, comments: (r.num_comments as number | null) ?? undefined }),
+    )
+    const norms = percentilesOf(raws)
+    const byVal = new Map<number, Array<number | string>>()
+    data.forEach((r, i) => {
+      const v = norms[i]
+      const arr = byVal.get(v)
+      if (arr) arr.push(r.id as number | string)
+      else byVal.set(v, [r.id as number | string])
+    })
+    for (const [v, ids] of byVal) {
+      const { error: upErr } = await db.from('signals').update({ score_norm: v }).in('id', ids)
+      if (!upErr) {
+        updated += ids.length
+        bySource[src] = (bySource[src] ?? 0) + ids.length
+      }
+    }
+  }
+  return { updated, bySource }
 }
 
 /** Raw engagement magnitudes for one source within the trailing window — the

@@ -4,7 +4,7 @@ import {
   resolveSynthModel,
   synthesizeInsightsV2,
 } from '@/lib/claude'
-import { ingestSources, type IngestQueries } from '@/lib/sources/ingest'
+import { ingestSources, recomputeScoreNorm, type IngestQueries } from '@/lib/sources/ingest'
 import { recomputeCurrentWeekSnapshots } from '@/lib/snapshots'
 import { backfillCanonicalTopics } from '@/lib/topics-db'
 import { materializeOpportunities } from '@/lib/advantage-materialize'
@@ -87,6 +87,13 @@ export async function POST(req: NextRequest) {
     } catch (err) {
       summary.ingestError = err instanceof Error ? err.message : 'ingest failed'
     }
+  }
+
+  // 1b. Recalibrate within-source engagement normalization (best-effort).
+  try {
+    summary.scoreNormUpdated = (await recomputeScoreNorm(db)).updated
+  } catch (err) {
+    summary.scoreNormError = err instanceof Error ? err.message : 'score_norm failed'
   }
 
   // 2. Snapshots (+ canonical backfill).
