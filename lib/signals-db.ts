@@ -18,12 +18,19 @@ export type SignalRow = {
   id: string // post_id or comment_id
   post_id: string
   subreddit: string
+  /** Source connector id ('reddit' | 'hackernews' | 'stackoverflow' | …).
+   *  Optional/absent on the legacy `posts` path → treated as 'reddit'. */
+  source?: string
   author: string
   text: string
   matchedPhrase: string
   intentType: IntentType
   category: Category
   topic: string | null
+  /** Within-source normalized engagement (0..1, from signals.score_norm). The
+   *  ONLY engagement value the scorer reads, so HN/SO/Reddit are comparable.
+   *  Absent (→ 0) for legacy rows and the `posts` path. */
+  engagementNorm?: number
   analyzedAt: number
   /** True creation time at the source (epoch ms) when known — Reddit's post
    *  time, NOT when we scanned it. null when unknown (legacy rows / comments
@@ -203,42 +210,54 @@ export async function loadIngestedSignals(
   const phrases = patterns.map((p) => p.phrase)
   const cutoffIso = opts.ageMs != null ? new Date(Date.now() - opts.ageMs).toISOString() : null
 
-  let q = db
-    .from('signals')
-    .select('external_id, title, body, author, url, category, topic, created_at, ingested_at')
-    .eq('source', 'reddit')
-    .or(buildOrFilter(['title', 'body'], phrases))
-    .order('ingested_at', { ascending: false })
-    .limit(PER_SOURCE_CAP)
-  if (cutoffIso) q = q.gte('ingested_at', cutoffIso)
-
-  const { data, error } = await q
-  // Tolerant: a missing `signals` table/column must not break the legacy path.
+  // All sources (was Reddit-only — HN/SO ingested rows were excluded here). The
+  // build is factored so we can retry without `score_norm` when the column
+  // hasn't been migrated yet (selecting an absent column errors the whole query
+  // and would empty the lane).
+  const buildQuery = (cols: string) => {
+    let q = db
+      .from('signals')
+      .select(cols)
+      .or(buildOrFilter(['title', 'body'], phrases))
+      .order('ingested_at', { ascending: false })
+      .limit(PER_SOURCE_CAP)
+    if (cutoffIso) q = q.gte('ingested_at', cutoffIso)
+    return q
+  }
+  const BASE_COLS = 'source, external_id, title, body, author, url, category, topic, created_at, ingested_at'
+  let { data, error } = await buildQuery(`${BASE_COLS}, score_norm`)
+  if (error) ({ data, error } = await buildQuery(BASE_COLS))
+  // Tolerant: a missing `signals` table must not break the legacy `posts` path.
   if (error || !data) return []
 
   const signals: SignalRow[] = []
-  for (const row of data) {
+  for (const row of data as unknown as Record<string, unknown>[]) {
     const url = (row.url as string | null) ?? ''
-    const subreddit = subredditFromUrl(url)
-    if (!subreddit) continue // can't address a reply without a subreddit
+    const source = (row.source as string | null) ?? 'reddit'
+    // Reddit rows carry a subreddit; HN/SO have none — keep them (the reply-now
+    // flow is gated on source at the UI layer, not by dropping the signal here).
+    const subreddit = subredditFromUrl(url) ?? ''
     const text = `${(row.title as string | null) ?? ''}\n${(row.body as string | null) ?? ''}`.trim()
     const match = findFirstMatch(text, patterns)
     if (!match) continue
     const id = row.external_id as string
+    const scoreNorm = row.score_norm
     signals.push({
       kind: 'post',
       id,
       post_id: id,
       subreddit,
+      source,
       author: (row.author as string) || 'unknown',
       text,
       matchedPhrase: match.phrase,
       intentType: match.intentType,
       category: (row.category as Category | null) ?? 'other',
       topic: (row.topic as string | null) ?? null,
+      engagementNorm: typeof scoreNorm === 'number' ? scoreNorm : undefined,
       analyzedAt: tsToMs(row.ingested_at) ?? Date.now(),
       postedAt: tsToMs(row.created_at),
-      permalink: url || `https://www.reddit.com/r/${subreddit}/comments/${id}/`,
+      permalink: url || (subreddit ? `https://www.reddit.com/r/${subreddit}/comments/${id}/` : ''),
     })
   }
   return signals

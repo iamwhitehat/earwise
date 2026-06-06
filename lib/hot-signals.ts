@@ -17,7 +17,9 @@ export function scoreSignal(signal: SignalRow, icpFit: number, relevance = 0.5, 
     relevance,
     postedAt: signal.postedAt ?? signal.analyzedAt,
     icpFit,
-    engagement: 0,
+    // Within-source normalized engagement (score_norm) — comparable across
+    // sources. Absent on legacy/posts rows → 0 (Reddit's prior behavior).
+    engagement: signal.engagementNorm ?? 0,
     now,
   })
   return { ...signal, score: s.score, tier: s.tier, breakdown: s.breakdown }

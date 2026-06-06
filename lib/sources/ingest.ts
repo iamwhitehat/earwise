@@ -9,6 +9,7 @@ import { classifyAndExtractBatch, CLASSIFY_BATCH_SIZE, PRIORITY } from '../claud
 import { canonicalTopic } from '../topics'
 import { postDedupeKey } from '../dedup'
 import { embedTexts, cosineSimilarity } from '../embeddings'
+import { rawEngagement, percentileRank, DEFAULT_SCORE_NORM_WINDOW_DAYS } from '../score-norm'
 import { CONNECTORS, type RawSignal } from './index'
 
 const MAX_NEW_PER_RUN = 60 // cap classification cost/latency per run
@@ -36,6 +37,7 @@ type PreparedSignal = RawSignal & {
   canonicalTopic: string | null
   confidence: string
   embedding: number[] | null
+  scoreNorm: number | null
 }
 
 export async function ingestSources(
@@ -107,6 +109,7 @@ export async function ingestSources(
         topic,
         canonicalTopic: canonicalTopic(topic),
         embedding: null,
+        scoreNorm: null,
       })
     })
   }
@@ -148,6 +151,31 @@ export async function ingestSources(
     if (p.embedding) keptEmbeddings.push(p.embedding)
   }
 
+  // 6b. Within-source engagement normalization (score_norm), guarded on the
+  // column existing (Phase-2 migration). Each kept signal's combined engagement
+  // is percentile-ranked against its OWN source's trailing-window distribution,
+  // so HN points and Reddit upvotes become comparable before scoring. Skipped
+  // (and not written) until the column is migrated — pre-migration ingests are
+  // unaffected.
+  const hasScoreNorm = await signalsHasScoreNorm(db)
+  if (hasScoreNorm && kept.length > 0) {
+    const cutoffIso = new Date(Date.now() - DEFAULT_SCORE_NORM_WINDOW_DAYS * 86_400_000).toISOString()
+    const bySrc = new Map<string, PreparedSignal[]>()
+    for (const p of kept) {
+      const g = bySrc.get(p.source)
+      if (g) g.push(p)
+      else bySrc.set(p.source, [p])
+    }
+    for (const [src, group] of bySrc) {
+      const existing = await loadWindowEngagements(db, src, cutoffIso)
+      const batchRaw = group.map((p) => rawEngagement(p.engagement))
+      const population = existing.concat(batchRaw)
+      group.forEach((p, i) => {
+        p.scoreNorm = percentileRank(batchRaw[i], population)
+      })
+    }
+  }
+
   // 7. Insert. Idempotent on (source, external_id); ignore conflicts.
   const rows = kept.map((p) => ({
     source: p.source,
@@ -165,6 +193,7 @@ export async function ingestSources(
     ratio: p.engagement.ratio ?? null,
     embedding: p.embedding,
     created_at: p.createdAt ? new Date(p.createdAt).toISOString() : null,
+    ...(hasScoreNorm ? { score_norm: p.scoreNorm } : {}),
   }))
 
   let inserted = 0
@@ -208,6 +237,36 @@ async function loadExistingKeys(
   const out = new Set<string>()
   for (const r of data ?? []) out.add(`${r.source}:${r.external_id}`)
   return out
+}
+
+/** Probe whether the score_norm column exists (Phase-2 migration). Selecting an
+ *  absent column errors, so this gates the compute + write — pre-migration
+ *  ingests stay unaffected. */
+async function signalsHasScoreNorm(db: SupabaseClient): Promise<boolean> {
+  const { error } = await db.from('signals').select('score_norm').limit(1)
+  return !error
+}
+
+/** Raw engagement magnitudes for one source within the trailing window — the
+ *  distribution a new signal's score_norm percentile-ranks against. */
+async function loadWindowEngagements(
+  db: SupabaseClient,
+  source: string,
+  cutoffIso: string,
+): Promise<number[]> {
+  const { data, error } = await db
+    .from('signals')
+    .select('score, num_comments')
+    .eq('source', source)
+    .gte('ingested_at', cutoffIso)
+    .limit(2000)
+  if (error || !data) return []
+  return data.map((r) =>
+    rawEngagement({
+      score: (r.score as number | null) ?? undefined,
+      comments: (r.num_comments as number | null) ?? undefined,
+    }),
+  )
 }
 
 async function loadKnownTopics(db: SupabaseClient): Promise<string[]> {

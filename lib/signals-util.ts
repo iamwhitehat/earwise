@@ -25,7 +25,7 @@ export function mergeSignalsByPostId(...lists: SignalRow[][]): SignalRow[] {
   const out: SignalRow[] = []
   for (const list of lists) {
     for (const s of list) {
-      const key = `${s.kind}:${s.id}`
+      const key = `${s.source ?? 'reddit'}:${s.kind}:${s.id}`
       if (seen.has(key)) continue
       seen.add(key)
       out.push(s)
