@@ -2,7 +2,7 @@ import type { NextRequest } from 'next/server'
 import type Anthropic from '@anthropic-ai/sdk'
 import { getSupabase } from '@/lib/supabase'
 import { canonicalTopic } from '@/lib/topics'
-import { callStructured, MODEL_BULK } from '@/lib/claude'
+import { callStructured, SYNTH_MODELS, type SynthTier } from '@/lib/claude'
 
 // GET /api/sources/themes — ONE Haiku pass that collapses the over-granular
 // demand topics (from the `signals` table) into a few broad, ranked "build
@@ -48,7 +48,13 @@ export async function GET(req: NextRequest) {
   try { db = getSupabase() } catch (err) {
     return Response.json({ error: err instanceof Error ? err.message : 'Configuration error' }, { status: 500 })
   }
-  const source = new URL(req.url).searchParams.get('source')
+  const params = new URL(req.url).searchParams
+  const source = params.get('source')
+  // Synthesis model is selectable here (this single call is high-leverage +
+  // cheap) — default Sonnet. Bulk classification stays Haiku; this never touches
+  // it, so a premium pick costs ~1 call, not 60.
+  const tier = params.get('model')
+  const model = tier && tier in SYNTH_MODELS ? SYNTH_MODELS[tier as SynthTier] : SYNTH_MODELS.balanced
 
   let q = db
     .from('signals')
@@ -80,8 +86,8 @@ export async function GET(req: NextRequest) {
     .join('\n')
 
   const out = await callStructured<{ themes?: unknown[] }>(
-    MODEL_BULK, SYSTEM, `Demand topics — "topic (post count): example":\n${list}`, THEMES_TOOL, 1500,
+    model, SYSTEM, `Demand topics — "topic (post count): example":\n${list}`, THEMES_TOOL, 1800,
   )
   const themes = Array.isArray(out?.themes) ? out.themes : []
-  return Response.json({ totalTopics: byTopic.size, totalSignals: data?.length ?? 0, themes })
+  return Response.json({ totalTopics: byTopic.size, totalSignals: data?.length ?? 0, model, themes })
 }

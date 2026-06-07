@@ -582,3 +582,8 @@ to{opacity:1;transform:none;}
 .ew .bc-build{font-size:13.5px;color:var(--text);line-height:1.5;}
 .ew .bc-lbl{font-family:var(--mono);font-size:9.5px;color:var(--lime);letter-spacing:1px;margin-right:7px;}
 .ew .bc-note{font-family:var(--mono);font-size:11px;color:var(--dim);text-align:center;margin-top:14px;}
+.ew .bc-actions{display:flex;align-items:center;gap:10px;flex-shrink:0;}
+.ew .bc-qual{display:flex;background:var(--card);border:1px solid var(--border);border-radius:9px;padding:3px;}
+.ew .bc-q{background:none;border:none;color:var(--muted);font-family:var(--mono);font-size:11px;padding:5px 10px;border-radius:6px;cursor:pointer;}
+.ew .bc-q.on{background:var(--lime);color:#0a0c0a;font-weight:600;}
+.ew .bc-q:disabled{opacity:.5;cursor:default;}

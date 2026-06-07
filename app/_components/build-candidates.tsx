@@ -17,11 +17,13 @@ export function BuildCandidates() {
   const [signals, setSignals] = useState(0)
   const [scanning, setScanning] = useState(false)
   const [err, setErr] = useState('')
+  // Synthesis model — only this one call escalates; classification stays Haiku.
+  const [quality, setQuality] = useState<'fast' | 'balanced' | 'max'>('balanced')
 
-  const loadThemes = useCallback(async () => {
+  const loadThemes = useCallback(async (model: 'fast' | 'balanced' | 'max') => {
     setErr('')
     try {
-      const r = await fetch('/api/sources/themes?source=reddit')
+      const r = await fetch(`/api/sources/themes?source=reddit&model=${model}`)
       const j = (await r.json()) as ThemesResponse
       if (!r.ok) throw new Error(j.error ?? 'Failed to read demand')
       setThemes([...(j.themes ?? [])].sort((a, b) => (b.demand ?? 0) - (a.demand ?? 0)))
@@ -31,7 +33,7 @@ export function BuildCandidates() {
       setThemes([])
     }
   }, [])
-  useEffect(() => { loadThemes() }, [loadThemes])
+  useEffect(() => { loadThemes(quality) }, [loadThemes, quality])
 
   async function rescan() {
     if (scanning || watchlist.length === 0) return
@@ -39,7 +41,7 @@ export function BuildCandidates() {
     setErr('')
     try {
       await fetch('/api/sources/ingest', { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ reddit: watchlist }) })
-      await loadThemes()
+      await loadThemes(quality)
     } catch {
       setErr('Scan failed — try again.')
     } finally {
@@ -57,9 +59,18 @@ export function BuildCandidates() {
               Ranked unmet demand from your watchlist{signals > 0 ? ` · ${signals} signals` : ''}. Re-scan to pull fresh demand.
             </div>
           </div>
-          <button type="button" className={`bc-scan${scanning ? ' on' : ''}`} onClick={rescan} disabled={scanning || watchlist.length === 0}>
-            {scanning ? 'Scanning…' : '↻ Re-scan'}
-          </button>
+          <div className="bc-actions">
+            <div className="bc-qual" title="Synthesis model — only this one call escalates; classification stays Haiku">
+              {(['fast', 'balanced', 'max'] as const).map((q) => (
+                <button key={q} type="button" className={`bc-q${quality === q ? ' on' : ''}`} onClick={() => setQuality(q)} disabled={scanning}>
+                  {q === 'fast' ? 'Fast' : q === 'balanced' ? 'Best' : 'Max'}
+                </button>
+              ))}
+            </div>
+            <button type="button" className={`bc-scan${scanning ? ' on' : ''}`} onClick={rescan} disabled={scanning || watchlist.length === 0}>
+              {scanning ? 'Scanning…' : '↻ Re-scan'}
+            </button>
+          </div>
         </div>
 
         {err && <div className="bc-err">{err}</div>}
