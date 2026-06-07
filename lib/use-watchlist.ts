@@ -27,7 +27,11 @@ export const STARTER_PRESETS: readonly StarterPreset[] = [
     key: 'tool-demand',
     label: 'Affordable-tool demand',
     description: 'People asking for cheap/free tools + alternatives to pricey software',
-    subs: ['indiehackers', 'smallbusiness', 'selfhosted', 'nocode', 'SideProject'],
+    subs: [
+      'indiehackers', 'smallbusiness', 'selfhosted', 'nocode', 'SideProject',
+      'Entrepreneur', 'SaaS', 'freelance', 'ecommerce', 'marketing',
+      'EntrepreneurRideAlong', 'AskMarketing',
+    ],
   },
   {
     key: 'saas-founder',

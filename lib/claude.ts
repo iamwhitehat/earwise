@@ -72,15 +72,16 @@ const VALID: ReadonlySet<Category> = new Set([
 export const MODEL_BULK = 'claude-haiku-4-5-20251001'
 
 // Synthesis (Insights, Buyer Language) is user-selectable via a Fast/Balanced/
-// Max dropdown. Balanced (Sonnet) is the default — good enough for synthesis;
-// Max (Opus) is opt-in for whole-business runs.
+// Max dropdown. Default is Fast (Haiku) to keep this cheap for private/solo use
+// — bump to Balanced (Sonnet) or Max (Opus) per-run when a polished synthesis is
+// actually worth the spend.
 export type SynthTier = 'fast' | 'balanced' | 'max'
 export const SYNTH_MODELS: Record<SynthTier, string> = {
   fast: MODEL_BULK,
   balanced: 'claude-sonnet-4-6',
   max: 'claude-opus-4-6',
 }
-export const DEFAULT_SYNTH_TIER: SynthTier = 'balanced'
+export const DEFAULT_SYNTH_TIER: SynthTier = 'fast'
 
 /** Resolve a (possibly untrusted) tier string to a concrete model id. */
 export function resolveSynthModel(tier: unknown): string {
