@@ -3,13 +3,11 @@ import type Anthropic from '@anthropic-ai/sdk'
 import { getSupabase } from '@/lib/supabase'
 import { canonicalTopic } from '@/lib/topics'
 import { callStructured, SYNTH_MODELS, type SynthTier } from '@/lib/claude'
+import { loadDemandRows } from '@/lib/demand-rows'
 
-// GET /api/sources/themes — ONE Haiku pass that collapses the over-granular
-// demand topics (from the `signals` table) into a few broad, ranked "build
-// candidates". Cheap (single Haiku call), clean (reads signals, not the diluted
-// opportunities table). The private demand-finder's "what should I build" view.
-//   ?source=reddit (filter)
-const DEMAND_CATEGORIES = ['pain_point', 'feature_request', 'tool_complaint']
+// GET /api/sources/themes — ONE synthesis pass that collapses the over-granular
+// demand topics (from BOTH `posts` and `signals`) into a few broad, ranked
+// "build candidates". ?source=reddit · ?model=fast|balanced|max (default Sonnet).
 
 const THEMES_TOOL: Anthropic.Messages.Tool = {
   name: 'demand_themes',
@@ -50,35 +48,22 @@ export async function GET(req: NextRequest) {
   }
   const params = new URL(req.url).searchParams
   const source = params.get('source')
-  // Synthesis model is selectable here (this single call is high-leverage +
-  // cheap) — default Sonnet. Bulk classification stays Haiku; this never touches
-  // it, so a premium pick costs ~1 call, not 60.
+  // Synthesis model is selectable — this single call is high-leverage + cheap.
   const tier = params.get('model')
   const model = tier && tier in SYNTH_MODELS ? SYNTH_MODELS[tier as SynthTier] : SYNTH_MODELS.balanced
 
-  let q = db
-    .from('signals')
-    .select('source, category, topic, canonical_topic, title')
-    .in('category', DEMAND_CATEGORIES)
-    .order('ingested_at', { ascending: false })
-    .limit(5000)
-  if (source) q = q.eq('source', source)
-  const { data, error } = await q
-  if (error) return Response.json({ error: error.message }, { status: 500 })
+  const rows = await loadDemandRows(db, { source })
 
   const byTopic = new Map<string, { count: number; example: string }>()
-  for (const r of (data ?? []) as Record<string, unknown>[]) {
-    const t = canonicalTopic((r.canonical_topic as string | null) ?? (r.topic as string | null))
+  for (const r of rows) {
+    const t = canonicalTopic(r.topic)
     if (!t) continue
     const a = byTopic.get(t) ?? { count: 0, example: '' }
     a.count++
-    if (!a.example) {
-      const title = ((r.title as string | null) ?? '').trim()
-      if (title) a.example = title.slice(0, 90)
-    }
+    if (!a.example && r.title.trim()) a.example = r.title.trim().slice(0, 90)
     byTopic.set(t, a)
   }
-  if (byTopic.size === 0) return Response.json({ totalTopics: 0, totalSignals: data?.length ?? 0, themes: [] })
+  if (byTopic.size === 0) return Response.json({ totalTopics: 0, totalSignals: rows.length, themes: [] })
 
   const list = Array.from(byTopic.entries())
     .sort((x, y) => y[1].count - x[1].count)
@@ -89,5 +74,5 @@ export async function GET(req: NextRequest) {
     model, SYSTEM, `Demand topics — "topic (post count): example":\n${list}`, THEMES_TOOL, 1800,
   )
   const themes = Array.isArray(out?.themes) ? out.themes : []
-  return Response.json({ totalTopics: byTopic.size, totalSignals: data?.length ?? 0, model, themes })
+  return Response.json({ totalTopics: byTopic.size, totalSignals: rows.length, model, themes })
 }
