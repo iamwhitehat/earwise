@@ -3,6 +3,11 @@
 import { useEffect, useState } from 'react'
 
 const STORAGE_KEY = 'earwise:watchlist'
+// Bump to push a refreshed curated set into EXISTING browsers once: on a new
+// version the validated subs are MERGED into the saved list (non-destructive —
+// keeps anything the user already had).
+const SEED_KEY = 'earwise:watchlist:seed'
+const SEED_VERSION = '2026-06-operators'
 
 /**
  * Pre-curated watchlist starting points. The first preset is also the
@@ -87,17 +92,28 @@ export function useWatchlist(): Watchlist {
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY)
+      const seedVer = localStorage.getItem(SEED_KEY)
       if (raw === null) {
+        // First install → seed the validated set.
         const seeded = [...STARTER_WATCHLIST]
         setWatchlist(seeded)
         try {
           localStorage.setItem(STORAGE_KEY, JSON.stringify(seeded))
+          localStorage.setItem(SEED_KEY, SEED_VERSION)
         } catch {}
       } else {
         const parsed = JSON.parse(raw) as unknown
-        if (Array.isArray(parsed)) {
-          setWatchlist(parsed.filter((v): v is string => typeof v === 'string'))
+        const list = Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === 'string') : []
+        if (seedVer !== SEED_VERSION) {
+          // One-time merge: add the refreshed curated subs that aren't already saved.
+          const lower = new Set(list.map((s) => s.toLowerCase()))
+          for (const s of STARTER_WATCHLIST) if (!lower.has(s.toLowerCase())) list.push(s)
+          try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(list))
+            localStorage.setItem(SEED_KEY, SEED_VERSION)
+          } catch {}
         }
+        setWatchlist(list)
       }
     } catch {}
     setHydrated(true)
