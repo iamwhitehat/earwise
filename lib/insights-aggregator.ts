@@ -6,6 +6,7 @@ import { dedupePosts } from './dedup'
 import { redditPermalink, type EvidenceRef } from './evidence'
 import { crossSourceConfirmation } from './sources/confirmation'
 import { whitespaceFromCounts } from './whitespace'
+import { subredditFromUrl } from './signals-util'
 
 const MAX_POSTS = 10_000
 const MAX_DEEP_POSTS = 2_000
@@ -68,6 +69,10 @@ type PostRow = {
   author: string
   num_comments: number | null
   posted_at: string | null
+  // Set on rows folded in from the multi-source `signals` table so evidence
+  // links + source attribution stay correct (absent → a Reddit `posts` row).
+  source?: string
+  url?: string
 }
 
 type DeepRow = {
@@ -88,7 +93,7 @@ export async function aggregateInsights(
   // Two parallel reads. Posts query excludes 'other' (noise reduction);
   // deep query includes everything that's been comment-analyzed since the
   // tools/quotes signal is independent of category.
-  const [postsRes, deepRes] = await Promise.all([
+  const [postsRes, deepRes, signalsRes] = await Promise.all([
     db
       .from('posts')
       .select('post_id, subreddit, category, topic, title, author, num_comments, posted_at')
@@ -101,13 +106,43 @@ export async function aggregateInsights(
       .not('comments_scanned_at', 'is', null)
       .order('analyzed_at', { ascending: false })
       .limit(MAX_DEEP_POSTS),
+    // Multi-source signals (reddit/HN/SO ingest) folded into the SAME demand
+    // aggregation — only the row set grows; the scoring math is unchanged.
+    // Tolerant: a missing/empty signals table degrades to the posts-only path.
+    db
+      .from('signals')
+      .select('source, external_id, title, author, category, topic, num_comments, created_at, url')
+      .in('category', ['pain_point', 'feature_request', 'tool_complaint'])
+      .order('ingested_at', { ascending: false })
+      .limit(MAX_POSTS),
   ])
 
   if (postsRes.error) throw new Error(`Posts query failed: ${postsRes.error.message}`)
   if (deepRes.error) throw new Error(`Deep-scans query failed: ${deepRes.error.message}`)
 
-  // Drop crossposts/near-duplicates before any counting.
-  const posts = dedupePosts((postsRes.data ?? []) as PostRow[])
+  // Map signals to the post row shape (reddit rows recover their subreddit from
+  // the permalink; other sources use the source id as the grouping).
+  const signalRows: PostRow[] = (signalsRes.error ? [] : (signalsRes.data ?? [])).map((r) => {
+    const row = r as Record<string, unknown>
+    const url = (row.url as string | null) ?? ''
+    const source = (row.source as string | null) ?? 'reddit'
+    return {
+      post_id: `${source}:${row.external_id as string}`,
+      subreddit: subredditFromUrl(url) ?? source,
+      category: row.category as Category,
+      topic: (row.topic as string | null) ?? null,
+      title: (row.title as string | null) ?? '',
+      author: (row.author as string | null) ?? '',
+      num_comments: (row.num_comments as number | null) ?? null,
+      posted_at: (row.created_at as string | null) ?? null,
+      source,
+      url: url || undefined,
+    }
+  })
+
+  // Drop crossposts/near-duplicates before any counting (union of both tables
+  // so a reddit post present in `posts` and `signals` isn't double-counted).
+  const posts = dedupePosts([...((postsRes.data ?? []) as PostRow[]), ...signalRows])
   const deep = (deepRes.data ?? []) as DeepRow[]
 
   const topTopics = computeTopTopics(posts)
@@ -278,8 +313,8 @@ function buildOpportunities(
         if (!title) continue
         examples.push({
           quote: title,
-          url: redditPermalink(p.subreddit, p.post_id),
-          source: 'reddit',
+          url: p.url ?? redditPermalink(p.subreddit, p.post_id),
+          source: p.source ?? 'reddit',
           subreddit: p.subreddit,
           postedAt: p.posted_at ? new Date(p.posted_at).getTime() : null,
         })
