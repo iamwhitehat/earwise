@@ -84,10 +84,14 @@ export const SYNTH_MODELS: Record<SynthTier, string> = {
 export const DEFAULT_SYNTH_TIER: SynthTier = 'fast'
 
 /** Resolve a (possibly untrusted) tier string to a concrete model id. */
-export function resolveSynthModel(tier: unknown): string {
-  return typeof tier === 'string' && tier in SYNTH_MODELS
-    ? SYNTH_MODELS[tier as SynthTier]
-    : SYNTH_MODELS[DEFAULT_SYNTH_TIER]
+export function resolveSynthModel(_tier: unknown): string {
+  // COST GUARD (private/solo use): premium synthesis is disabled — Insights,
+  // Buyer-Voice, and the cron pipeline all run on Haiku regardless of the
+  // requested tier, so nothing can quietly bill Sonnet/Opus. To re-enable the
+  // Fast/Balanced/Max dropdown, restore the tier lookup below:
+  //   return typeof _tier === 'string' && _tier in SYNTH_MODELS
+  //     ? SYNTH_MODELS[_tier as SynthTier] : SYNTH_MODELS[DEFAULT_SYNTH_TIER]
+  return MODEL_BULK
 }
 
 let _client: Anthropic | null = null

@@ -3,7 +3,7 @@
 // spending tokens, then (2) EXPAND into a full post. Grounded in the #1 opportunity
 // + buyer language so it reads like the market, not a template.
 import type Anthropic from '@anthropic-ai/sdk'
-import { callStructured, SYNTH_MODELS } from './claude'
+import { callStructured, MODEL_BULK } from './claude'
 import type { BlogOutline, BlogOutlineSection, BlogPost, BlogPostSection } from './blog-md'
 
 export type { BlogOutline, BlogOutlineSection, BlogPost, BlogPostSection } from './blog-md'
@@ -66,7 +66,7 @@ function clampSections<T extends { title: string }>(arr: unknown, map: (o: Recor
 }
 
 export async function generateBlogOutline(context: string): Promise<BlogOutline | null> {
-  const out = await callStructured<Partial<BlogOutline>>(SYNTH_MODELS.balanced, OUTLINE_SYSTEM, context, OUTLINE_TOOL, 1400)
+  const out = await callStructured<Partial<BlogOutline>>(MODEL_BULK, OUTLINE_SYSTEM, context, OUTLINE_TOOL, 1400)
   if (!out || typeof out.title !== 'string') return null
   return {
     title: out.title.trim(),
@@ -79,7 +79,7 @@ export async function generateBlogOutline(context: string): Promise<BlogOutline 
 
 export async function expandBlogPost(title: string, sections: BlogOutlineSection[], context: string): Promise<BlogPost | null> {
   const user = `${context}\n\nTitle: ${title}\nApproved outline (write each in order):\n${sections.map((s, i) => `${i + 1}. ${s.title} — ${s.desc}`).join('\n')}`
-  const out = await callStructured<Partial<BlogPost>>(SYNTH_MODELS.balanced, POST_SYSTEM, user, POST_TOOL, 4000)
+  const out = await callStructured<Partial<BlogPost>>(MODEL_BULK, POST_SYSTEM, user, POST_TOOL, 4000)
   if (!out) return null
   return {
     lede: typeof out.lede === 'string' ? out.lede.trim() : '',
