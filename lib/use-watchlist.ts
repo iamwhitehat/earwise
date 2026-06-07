@@ -24,6 +24,12 @@ export type StarterPreset = {
 
 export const STARTER_PRESETS: readonly StarterPreset[] = [
   {
+    key: 'tool-demand',
+    label: 'Affordable-tool demand',
+    description: 'People asking for cheap/free tools + alternatives to pricey software',
+    subs: ['indiehackers', 'smallbusiness', 'selfhosted', 'nocode', 'SideProject'],
+  },
+  {
     key: 'saas-founder',
     label: 'SaaS founder',
     description: 'Pain points and feature requests from product-led founders',
