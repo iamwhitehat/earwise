@@ -19,6 +19,17 @@ const PAGE_LIMIT = 100
 const CACHE_TTL_MS = 5 * 60 * 1000
 const RETRY_DELAY_MS = 1500
 
+// Demand-phrase search query — a focused subset of the buying-intent phrases.
+// Reddit's `new` feed only shows the last ~100 posts (mostly noise); a phrase
+// search pulls a YEAR of posts that explicitly voice need, far denser and
+// reaching older history the `new` feed scrolled past. Free (RSS), so this only
+// costs an extra network call, not Claude budget.
+const DEMAND_PHRASES = [
+  'looking for', 'alternative to', 'is there a tool', 'any recommendations',
+  'what do you use for', 'recommend a', 'anyone know a', 'best tool for',
+]
+const SEARCH_Q = encodeURIComponent(DEMAND_PHRASES.map((p) => `"${p}"`).join(' OR '))
+
 const cache = new Map<string, { at: number; signals: RawSignal[] }>()
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
 
@@ -37,6 +48,27 @@ async function fetchPolite(url: string, signal?: AbortSignal): Promise<Response 
   return null
 }
 
+/** Fetch one Reddit Atom feed (new or search) → RawSignals. [] on any failure. */
+async function fetchFeed(url: string, sub: string, signal?: AbortSignal): Promise<RawSignal[]> {
+  const res = await fetchPolite(url, signal)
+  if (!res) return []
+  const xml = await res.text()
+  if (!xml.includes('<entry>')) return []
+  const { posts } = parseAtom(xml, sub)
+  return posts.map(
+    (p): RawSignal => ({
+      source: 'reddit',
+      externalId: p.id,
+      title: p.title,
+      body: p.selftext,
+      author: p.author,
+      url: p.permalink,
+      createdAt: p.postedAt,
+      engagement: {},
+    }),
+  )
+}
+
 export const redditConnector: SourceConnector = {
   id: 'reddit',
   async search(query, signal) {
@@ -47,28 +79,25 @@ export const redditConnector: SourceConnector = {
     if (cached && Date.now() - cached.at < CACHE_TTL_MS) return cached.signals
 
     try {
-      const res = await fetchPolite(
-        `https://www.reddit.com/r/${encodeURIComponent(sub)}/new.rss?limit=${PAGE_LIMIT}`,
-        signal,
-      )
-      if (!res) return cached?.signals ?? [] // serve stale on failure rather than nothing
-      const xml = await res.text()
-      if (!xml.includes('<entry>')) return []
-      const { posts } = parseAtom(xml, sub)
-      const signals = posts.map(
-        (p): RawSignal => ({
-          source: 'reddit',
-          externalId: p.id,
-          title: p.title,
-          body: p.selftext,
-          author: p.author,
-          url: p.permalink,
-          createdAt: p.postedAt,
-          engagement: {},
-        }),
-      )
-      cache.set(sub, { at: Date.now(), signals })
-      return signals
+      const base = `https://www.reddit.com/r/${encodeURIComponent(sub)}`
+      // Phrase search (a year of demand) FIRST, then the latest `new` feed.
+      // Search-first ordering prioritizes the denser rows within the downstream
+      // classify budget; both are free RSS so this adds no Claude cost.
+      const [searchSigs, newSigs] = await Promise.all([
+        fetchFeed(`${base}/search.rss?q=${SEARCH_Q}&restrict_sr=1&sort=new&t=year&limit=${PAGE_LIMIT}`, sub, signal),
+        fetchFeed(`${base}/new.rss?limit=${PAGE_LIMIT}`, sub, signal),
+      ])
+
+      const seen = new Set<string>()
+      const merged: RawSignal[] = []
+      for (const s of [...searchSigs, ...newSigs]) {
+        if (seen.has(s.externalId)) continue
+        seen.add(s.externalId)
+        merged.push(s)
+      }
+      if (merged.length === 0) return cached?.signals ?? [] // serve stale rather than nothing
+      cache.set(sub, { at: Date.now(), signals: merged })
+      return merged
     } catch (err) {
       console.warn('[sources/reddit] fetch failed:', err)
       return cached?.signals ?? []
