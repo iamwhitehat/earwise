@@ -563,3 +563,22 @@ to{opacity:1;transform:none;}
 .scan.spinning::before{content:'';position:absolute;inset:0;background:linear-gradient(100deg,transparent 30%,rgba(255,255,255,0.18) 50%,transparent 70%);background-size:220% 100%;animation:scan-shimmer 1.4s linear infinite;}
 @keyframes scan-sweep{0%{left:-45%;}100%{left:100%;}}
 @keyframes scan-shimmer{0%{background-position:140% 0;}100%{background-position:-40% 0;}}
+
+/* Build candidates screen */
+.ew .bc-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:18px;}
+.ew .bc-scan{background:var(--lime);color:#0a0c0a;border:none;border-radius:10px;padding:10px 16px;font-family:var(--sans);font-weight:600;font-size:13px;cursor:pointer;white-space:nowrap;}
+.ew .bc-scan:disabled{opacity:.55;cursor:default;}
+.ew .bc-scan.on{opacity:.85;}
+.ew .bc-err{color:var(--red);font-size:13px;margin-bottom:12px;}
+.ew .bc-empty{color:var(--muted);font-size:14px;line-height:1.6;padding:30px 22px;text-align:center;border:1px dashed var(--border);border-radius:12px;}
+.ew .bc-empty b{color:var(--lime);}
+.ew .bc-card{display:flex;gap:14px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 18px;margin-bottom:10px;}
+.ew .bc-rank{flex-shrink:0;width:30px;height:30px;border-radius:8px;background:rgba(200,240,50,.12);border:1px solid rgba(200,240,50,.4);color:var(--lime);font-weight:700;display:flex;align-items:center;justify-content:center;font-size:14px;}
+.ew .bc-body{flex:1;min-width:0;}
+.ew .bc-top{display:flex;align-items:center;gap:10px;margin-bottom:5px;flex-wrap:wrap;}
+.ew .bc-top b{font-size:15.5px;font-weight:600;}
+.ew .bc-dem{font-family:var(--mono);font-size:10px;color:var(--lime);background:#161a13;border:1px solid rgba(200,240,50,.4);border-radius:6px;padding:2px 7px;}
+.ew .bc-pain{font-size:13.5px;color:var(--muted);line-height:1.5;margin-bottom:8px;}
+.ew .bc-build{font-size:13.5px;color:var(--text);line-height:1.5;}
+.ew .bc-lbl{font-family:var(--mono);font-size:9.5px;color:var(--lime);letter-spacing:1px;margin-right:7px;}
+.ew .bc-note{font-family:var(--mono);font-size:11px;color:var(--dim);text-align:center;margin-top:14px;}

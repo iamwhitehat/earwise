@@ -12,6 +12,7 @@ import { useSidebarCtx } from './sidebar-provider'
 type Dest = { id: string; ic: IconName; label: string; href: string }
 
 const DEMAND_DESTS: Dest[] = [
+  { id: 'build', ic: 'opportunities', label: 'Build ideas', href: '/build' },
   { id: 'opportunities', ic: 'opportunities', label: 'Opportunities', href: '/demand' },
   { id: 'buyervoice', ic: 'buyervoice', label: 'Buyer Voice', href: '/buyer-voice' },
 ]
@@ -29,6 +30,7 @@ const MOBILE_TABS: { id: string; ic: IconName; label: string; href: string; stag
 // pathname → active screen id
 function activeId(pathname: string): string {
   if (pathname === '/' || pathname.startsWith('/today')) return 'today'
+  if (pathname.startsWith('/build')) return 'build'
   if (pathname.startsWith('/demand')) return 'opportunities'
   if (pathname.startsWith('/buyer-voice')) return 'buyervoice'
   if (pathname.startsWith('/warm-leads')) return 'warmleads'
@@ -37,7 +39,7 @@ function activeId(pathname: string): string {
   return ''
 }
 const STAGE_OF: Record<string, 'demand' | 'distribution' | undefined> = {
-  opportunities: 'demand', buyervoice: 'demand', warmleads: 'distribution', drafts: 'distribution',
+  build: 'demand', opportunities: 'demand', buyervoice: 'demand', warmleads: 'distribution', drafts: 'distribution',
 }
 
 export function NavBar() {
