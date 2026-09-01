@@ -32,6 +32,14 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.local.example
+
+# internal planning, brand exploration, marketing decks — kept locally, never published
+/_private/
+
+# scratch data from scan runs
+/scripts/.scan-progress.log
+/scripts/bulkcomments.txt
 
 # vercel
 .vercel
