@@ -12,7 +12,7 @@ import { stackoverflowConnector } from '../lib/sources/stackoverflow'
 import { whitespaceFromCounts, type WhitespaceCounts } from '../lib/whitespace'
 import { canonicalTopic } from '../lib/topics'
 import { dedupePosts, countDuplicates } from '../lib/dedup'
-import { findFirstMatch, INTENT_PATTERNS } from '../lib/intent-patterns'
+import { findFirstMatch, INTENT_PATTERNS, patternsFor } from '../lib/intent-patterns'
 import { makerPreflag } from '../lib/buyer-intent'
 import type { RawSignal } from '../lib/sources/types'
 import { activeDir } from './sessions'
@@ -114,10 +114,17 @@ export type ScanOptions = {
  * is not a buyer asking for one.
  */
 export function looksLikeDemand(s: RawSignal): boolean {
-  const text = `${s.title}
-${s.body || ''}`
+  const text = `${s.title}\n${s.body || ''}`
   if (makerPreflag(text)) return false
   return findFirstMatch(text, INTENT_PATTERNS) !== null
+}
+
+/** Does the post express willingness to spend? Distinct from demand — a buyer
+ *  naming a price or "I'd pay for X" is a far stronger profit signal than
+ *  someone merely asking for recommendations. */
+export function willingToPay(s: RawSignal): boolean {
+  const text = `${s.title}\n${s.body || ''}`
+  return findFirstMatch(text, patternsFor('willing-to-pay')) !== null
 }
 
 /** A corpus post — a RawSignal plus when the collector first saw it. */
@@ -154,6 +161,10 @@ export type ScoredTopic = {
   refutedBy?: string[]
   /** The still-unserved sub-segment the QA Skeptic named, when it refuted. */
   residualGap?: string
+  /** Demand posts whose text names a price or says "I'd pay". */
+  willingToPay: number
+  /** Composite 0..1 "worth building" signal — see profitability(). */
+  profitability: number
   /** 0..1 — how much evidence stands behind that score. */
   confidence: number
   /** whitespace shrunk toward neutral by confidence. Ranking uses this. */
@@ -180,6 +191,31 @@ export function evidenceConfidence(posts: number): number {
 export function shrinkToNeutral(whitespace: number, posts: number): number {
   const c = evidenceConfidence(posts)
   return 0.5 + (whitespace - 0.5) * c
+}
+
+/**
+ * Composite 0..1 "worth building" signal. Deterministic and transparent — a
+ * weighted mix of what the pipeline actually measured:
+ *   demand      (distinct people, saturates at 20 posts)
+ *   willingness (share of demand posts naming a price / "I'd pay") — the
+ *                strongest profit signal
+ *   gap         (the Skeptic named a concrete still-unserved segment)
+ *   openness    (evidence-weighted whitespace, already QA-challenged)
+ *   pain        (share of demand posts dissatisfied with no incumbent named)
+ */
+export function profitability(
+  posts: number,
+  demand: number,
+  wtp: number,
+  pain: number,
+  openness: number,
+  hasGap: boolean,
+): number {
+  const d = Math.min(1, posts / 20)
+  const w = demand > 0 ? wtp / demand : 0
+  const p = demand > 0 ? pain / demand : 0
+  const g = hasGap ? 1 : 0
+  return 0.25 * d + 0.30 * w + 0.20 * g + 0.15 * openness + 0.10 * p
 }
 
 export type Theme = {
@@ -211,6 +247,7 @@ export type ScanResult = {
     vocabAfter: number
   }
   themes: Theme[]
+  niches: NicheSuggestion[]
   topics: ScoredTopic[]
   sources: ScanOptions
 }
@@ -719,6 +756,7 @@ type Agg = {
   demand: number
   demandNoTool: number
   hate: number
+  wtp: number
   tools: Set<string>
   examples: Array<{ title: string; url: string }>
 }
@@ -756,6 +794,7 @@ export function scoreTopics(
         demand: 0,
         demandNoTool: 0,
         hate: 0,
+        wtp: 0,
         tools: new Set<string>(),
         examples: [],
       }
@@ -769,6 +808,7 @@ export function scoreTopics(
       if (c.tools.length === 0 && c.dissatisfied) a.demandNoTool++
     }
     if (c.dissatisfied) a.hate++
+    if (willingToPay(signal)) a.wtp++
     for (const t of c.tools) a.tools.add(t)
     if (a.examples.length < 3) {
       a.examples.push({ title: signal.title.slice(0, 140), url: signal.url })
@@ -798,18 +838,21 @@ export function scoreTopics(
         distinctTools: known.size,
       }
       const ws = whitespaceFromCounts(counts)
+      const rk = shrinkToNeutral(ws, a.total)
       return {
         topic,
         posts: a.total,
         demand: a.demand,
         unanswered: a.demandNoTool,
+        willingToPay: a.wtp,
         distinctTools: known.size,
         tools: Array.from(known).slice(0, 8),
         refutedBy: refutedCount ? (refuted[topic] ?? []).slice(0, 8) : undefined,
         residualGap: gaps[topic] || undefined,
         whitespace: ws,
         confidence: evidenceConfidence(a.total),
-        ranked: shrinkToNeutral(ws, a.total),
+        ranked: rk,
+        profitability: profitability(a.total, a.demand, a.wtp, a.demandNoTool, rk, !!gaps[topic]),
         examples: a.examples,
       }
     })
@@ -873,6 +916,112 @@ export async function clusterThemes(topicInput: Array<[string, number, string]>)
   if (block?.type !== 'tool_use') return []
   const themes = (block.input as { themes?: Theme[] }).themes ?? []
   return Array.isArray(themes) ? themes : []
+}
+
+// --- niche synthesis --------------------------------------------------------
+// Turns scored topics into a ranked list of "build this" opportunities. This is
+// the headline output: not "which spaces are open" but "which are worth building
+// for". It is a model call grounded in measured evidence — the actual post
+// titles, willingness-to-pay counts and residual gaps — so it cannot invent
+// demand, only rank and frame what the corpus already showed.
+
+export type NicheSuggestion = {
+  niche: string
+  buyer: string
+  whyProfitable: string
+  v1Product: string
+  pricePoint: string
+  /** How much measured evidence backs this suggestion. */
+  confidence: 'high' | 'medium' | 'low'
+}
+
+const NICHES_TOOL: Anthropic.Messages.Tool = {
+  name: 'suggest_niches',
+  description: 'Rank the most profitable niche opportunities from measured demand.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      niches: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            niche: { type: 'string', description: 'A concrete, sellable niche name (2-5 words)' },
+            buyer: { type: 'string', description: 'Who specifically holds the budget and pays' },
+            whyProfitable: {
+              type: 'string',
+              description: 'The profit case, grounded in what the posts actually said. Cite the pain, not a platitude.',
+            },
+            v1Product: {
+              type: 'string',
+              description: 'A concrete first product a solo dev can ship in 2-4 weeks',
+            },
+            pricePoint: {
+              type: 'string',
+              description: 'What these buyers already pay or would pay (a range is fine)',
+            },
+            confidence: {
+              type: 'string',
+              enum: ['high', 'medium', 'low'],
+              description: 'How much measured evidence supports this — high only when posts recur and name a budget or pain',
+            },
+          },
+          required: ['niche', 'buyer', 'whyProfitable', 'v1Product', 'pricePoint', 'confidence'],
+        },
+      },
+    },
+    required: ['niches'],
+  },
+}
+
+export async function synthesizeNiches(
+  topics: ScoredTopic[],
+  log: Log,
+  max = 6,
+): Promise<NicheSuggestion[]> {
+  // Rank by the deterministic profitability score, then let the model frame the
+  // top ones. A weak corpus yields few candidates and the model is told to say
+  // so rather than invent demand.
+  const top = [...topics].sort((a, b) => b.profitability - a.profitability).slice(0, 12)
+  if (!top.length) {
+    log('no scoreable topics to turn into niche suggestions')
+    return []
+  }
+  const evidence = top
+    .map((t, i) => {
+      const wtp = t.willingToPay ? ` · ${t.willingToPay} willing-to-pay` : ''
+      const gap = t.residualGap ? `\n   unserved segment: ${t.residualGap}` : ''
+      const tools = t.tools.length ? t.tools.join(', ') : 'none named'
+      const ex = t.examples.map((e) => e.title).join(' | ')
+      return `${i + 1}. "${t.topic}" — ${t.posts} posts${wtp} · existing: ${tools}${gap}\n   examples: ${ex}`
+    })
+    .join('\n\n')
+
+  const anthropic = client()
+  const res = await anthropic.messages.create({
+    model: JUDGEMENT_MODEL,
+    max_tokens: 2500,
+    system:
+      'You are a sharp niche-hunter for a solo founder who ships small paid tools. Below are ' +
+      'the top demand topics found in real forum posts, with the actual post titles as evidence. ' +
+      'Rank the MOST PROFITABLE niche opportunities to build for.\n\n' +
+      'Rules:\n' +
+      '- Ground every claim in the evidence given. Do NOT invent demand, buyers, or pain.\n' +
+      '- Prefer niches where the posts show willingness to pay, an existing tool budget, or a ' +
+      'recurring complaint.\n' +
+      '- "high" confidence only when the same need recurs and the posts name a price or pain. ' +
+      'Thin evidence = "low", and say why it is thin rather than inflating it.\n' +
+      '- If nothing is worth building, return an empty list. Fewer, sharper niches beat a padded list.',
+    tools: [NICHES_TOOL],
+    tool_choice: { type: 'tool', name: 'suggest_niches' },
+    messages: [{ role: 'user', content: `Measured demand:\n\n${evidence}` }],
+  })
+  const block = res.content.find((c) => c.type === 'tool_use')
+  if (block?.type !== 'tool_use') return []
+  const niches = (block.input as { niches?: NicheSuggestion[] }).niches ?? []
+  const out = Array.isArray(niches) ? niches.slice(0, max) : []
+  log(`${out.length} profitable niche suggestion${out.length === 1 ? '' : 's'}`)
+  return out
 }
 
 // --- source planning --------------------------------------------------------
@@ -1147,6 +1296,10 @@ export async function runScan(
   const themes = signal?.aborted ? [] : await clusterThemes(topicInput)
   log(`${themes.length} themes`)
 
+  log('synthesizing profitable niches…')
+  const niches = signal?.aborted ? [] : await synthesizeNiches(scored, log)
+  log(`${niches.length} niche suggestion${niches.length === 1 ? '' : 's'}`)
+
   const result: ScanResult = {
     finishedAt: new Date().toISOString(),
     cancelled: !!signal?.aborted,
@@ -1164,6 +1317,7 @@ export async function runScan(
       vocabAfter: outcome.vocabAfter,
     },
     themes,
+    niches,
     topics: scored,
     sources: opts,
   }

@@ -4,6 +4,8 @@ import {
   evidenceConfidence,
   shrinkToNeutral,
   looksLikeDemand,
+  willingToPay,
+  profitability,
   type Classified,
 } from './scan-core'
 import type { RawSignal } from '../lib/sources/types'
@@ -90,5 +92,27 @@ describe('looksLikeDemand — the deterministic pre-filter', () => {
   })
   it('a plain recommendation ask is demand', () => {
     expect(looksLikeDemand({ ...sig(), title: 'any recommendations for a CRM?' })).toBe(true)
+  })
+})
+
+describe('willingToPay — the profit signal', () => {
+  it('detects an explicit price statement', () => {
+    expect(willingToPay({ ...sig(), title: 'willing to pay $50/mo for this' })).toBe(true)
+    expect(willingToPay({ ...sig(), title: 'I would pay for a tool that does X' })).toBe(true)
+  })
+  it('does not fire on a plain recommendation ask', () => {
+    expect(willingToPay({ ...sig(), title: 'any recommendations for a CRM?' })).toBe(false)
+  })
+})
+
+describe('profitability — composite worth-building score', () => {
+  it('is higher with willingness-to-pay than without', () => {
+    const withWtp = profitability(10, 10, 5, 2, 0.5, true)
+    const noWtp = profitability(10, 10, 0, 2, 0.5, true)
+    expect(withWtp).toBeGreaterThan(noWtp)
+  })
+  it('is bounded 0..1', () => {
+    expect(profitability(1000, 1000, 1000, 1000, 1, true)).toBeLessThanOrEqual(1)
+    expect(profitability(0, 0, 0, 0, 0, false)).toBeGreaterThanOrEqual(0)
   })
 })

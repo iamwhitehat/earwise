@@ -186,6 +186,49 @@
   .dim { opacity: .5; }
   .empty { color: var(--faint); font-size: 13px; }
 
+  /* ---- profitable niches ---- */
+  .niche {
+    border: 1px solid var(--line-soft); border-radius: 9px;
+    padding: 14px 16px 13px; margin-bottom: 12px; background: var(--panel);
+  }
+  .niche h3 { margin: 0 0 6px; font-size: 14.5px; font-weight: 600; }
+  .niche .conf {
+    float: right; font-size: 10px; font-weight: 700; padding: 2px 9px;
+    border-radius: 10px; text-transform: uppercase; letter-spacing: .05em;
+  }
+  .niche .conf.high   { background: var(--accent-bg); color: var(--accent); }
+  .niche .conf.medium { background: var(--warn-bg); color: var(--warn); }
+  .niche .conf.low    { background: var(--sunk); color: var(--faint); }
+  .niche .buyer { font-size: 12.5px; color: var(--muted); margin-bottom: 8px; }
+  .niche .why { font-size: 13px; line-height: 1.6; margin-bottom: 9px; }
+  .niche .v1 { font-size: 12.5px; }
+  .niche .v1 b, .niche .price b { color: var(--accent); }
+  .niche .price { font-size: 12px; color: var(--muted); margin-top: 5px; }
+
+  /* ---- agent board ---- */
+  #boardPanel { margin-bottom: 16px; }
+  #board { display: flex; flex-direction: column; gap: 7px; max-height: 380px; overflow-y: auto; }
+  .post {
+    display: flex; gap: 11px; padding: 9px 12px; border-radius: 8px;
+    background: var(--sunk); border: 1px solid var(--line-soft);
+  }
+  .post .who {
+    flex: 0 0 auto; display: flex; align-items: baseline; gap: 7px;
+    font-size: 11.5px; font-weight: 700; color: var(--muted); min-width: 96px;
+    letter-spacing: .01em;
+  }
+  .post .who .ic { font-size: 15px; line-height: 1; }
+  .post .msg { flex: 1; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+  .post .msg .sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .post .t { flex: 0 0 auto; font-size: 10px; color: var(--faint); font-variant-numeric: tabular-nums; }
+  .post.guide { background: var(--accent-bg); border-color: var(--accent); }
+  .post.guide .who { color: var(--accent); }
+  .post.skeptic .who { color: var(--warn); }
+  .post.strategist .who { color: var(--accent); }
+  .post.err { border-color: var(--warn-line); }
+  .post .cta { margin-top: 8px; }
+  .post .cta button { font-size: 12px; }
+
   /* ---- target / niches ---- */
   button.ghost {
     background: transparent; color: var(--accent);
@@ -298,7 +341,7 @@
   body.keying #sourcesPanel,
   body.keying #corpusPanel,
   body.keying #outputPanel,
-  body.keying #nextUp { display: none; }
+  body.keying #boardPanel { display: none; }
   body.setting-up #keyPanel { display: none; }
 
   body.setting-up .pipe,
@@ -308,7 +351,7 @@
   body.setting-up #sourcesPanel,
   body.setting-up #corpusPanel,
   body.setting-up #outputPanel,
-  body.setting-up #nextUp { display: none; }
+  body.setting-up #boardPanel { display: none; }
   .niche button.pick { background: var(--accent); color: #fff; box-shadow: none; }
 
   /* ---- api key capture ---- */
@@ -508,9 +551,13 @@
       <h1><svg class="mark" viewBox="0 0 24 24" width="21" height="21" aria-hidden="true"><g fill="currentColor"><rect x="0"  y="0"  width="6" height="6" rx="1.4"/><rect x="9"  y="0"  width="6" height="6" rx="1.4"/><rect x="18" y="0"  width="6" height="6" rx="1.4"/><rect x="0"  y="9"  width="6" height="6" rx="1.4"/><rect x="18" y="9"  width="6" height="6" rx="1.4"/><rect x="0"  y="18" width="6" height="6" rx="1.4"/><rect x="9"  y="18" width="6" height="6" rx="1.4"/><rect x="18" y="18" width="6" height="6" rx="1.4"/></g><rect class="gap" x="9" y="9" width="6" height="6" rx="1.4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="2.2 1.6"/></svg><span class="wordmark">earwise</span><span class="sub">demand scanner</span></h1>
       <button id="detailToggle">show details</button>
     </div>
-    <div id="nextUp"></div>
     <div class="pipe" id="pipeline"></div>
   </header>
+
+  <div class="panel" id="boardPanel">
+    <h2>agents at work</h2>
+    <div id="board"><div class="post guide" id="guidePost"><span class="who"><span class="ic">🧭</span>Guide</span><span class="msg">loading…</span></div></div>
+  </div>
 
   <div class="panel" id="keyPanel" hidden>
     <div class="setupHead">
@@ -652,14 +699,58 @@ function esc(s) {
   return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 }
 
+// ---- agents ----------------------------------------------------------------
+// The pipeline is a small team, not a black box. Each agent has a name and a
+// voice; the board shows them posting as they work, and the Guide holds the top
+// slot saying the single most useful next action.
+
+const AGENTS = {
+  guide:      { ic: '🧭', n: 'Guide' },
+  scout:      { ic: '🕵️', n: 'Scout' },
+  analyst:    { ic: '🔬', n: 'Analyst' },
+  skeptic:    { ic: '⚖️', n: 'Skeptic' },
+  strategist: { ic: '🎯', n: 'Strategist' },
+};
+
+/** Attribute a log line to the agent that produced it. Heuristic but stable. */
+function agentFor(msg) {
+  const m = String(msg).toLowerCase();
+  if (/challeng|refut|stands|scoring|whitespace|saturat|re-scor/.test(m)) return 'skeptic';
+  if (/synthesiz|profitable niche|niche suggestion|cluster|theme/.test(m)) return 'strategist';
+  if (/collect|seen,|new post|corpus|r\//.test(m) || /hackernews|stackoverflow/.test(m)) return 'scout';
+  if (/classif|topic reuse|vocabulary|categor|priming|label|dedupe|crosspost|repl/.test(m)) return 'analyst';
+  return 'guide';
+}
+
+function postToBoard(agent, text, kind) {
+  const b = $('board');
+  if (!b) return null;
+  const a = AGENTS[agent] || AGENTS.guide;
+  const el = document.createElement('div');
+  el.className = 'post ' + agent + (kind === 'bad' ? ' err' : '');
+  const t = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  el.innerHTML = `<span class="who"><span class="ic">${a.ic}</span>${a.n}</span>` +
+    `<span class="msg">${esc(text)}</span><span class="t">${t}</span>`;
+  b.appendChild(el);
+  while (b.children.length > 80) b.removeChild(b.children[1]); // keep guidePost + latest
+  return el;
+}
+
+function clearBoard() {
+  const b = $('board');
+  if (!b) return;
+  [...b.children].forEach((e) => { if (e.id !== 'guidePost') e.remove(); });
+}
+
 function addLog(msg, kind) {
-  if (idle) { log.innerHTML = ''; idle = false; }
+  if (idle) { log.innerHTML = ''; idle = false; clearBoard(); }
   const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
   const el = document.createElement('span');
   el.className = 'l' + (kind ? ' ' + kind : '');
   el.textContent = msg + '\n';
   log.appendChild(el);
   if (atBottom) log.scrollTop = log.scrollHeight;
+  postToBoard(agentFor(msg), msg, kind);
 }
 
 function render(r) {
@@ -667,6 +758,7 @@ function render(r) {
   // Results written by earlier versions may lack newer fields — never assume.
   r.topics = r.topics || [];
   r.themes = r.themes || [];
+  r.niches = r.niches || [];
   const when = r.finishedAt ? new Date(r.finishedAt) : null;
   const stamp = when && !isNaN(when) ? when.toLocaleString() : 'earlier run';
   const minPosts = (r.sources && r.sources.minTopicPosts) || 2;
@@ -739,6 +831,22 @@ function render(r) {
       ? `<div class="hint detail">${r.learning.fromCache} from cache · ${r.learning.billed} billed · ` +
         `vocabulary ${r.learning.vocabBefore} → ${r.learning.vocabAfter}</div>`
       : '') + `</div>`;
+
+  if (r.niches.length) {
+    html += `<div class="panel"><h2>most profitable niches</h2>
+      <div class="hint" style="margin:-6px 0 12px">ranked by measured demand, willingness-to-pay and a concrete unserved gap — grounded in the posts, not invented</div>`;
+    for (const n of r.niches) {
+      html += `<div class="niche">
+        <span class="conf ${esc(n.confidence || 'low')}">${esc(n.confidence || 'low')}</span>
+        <h3>${esc(n.niche)}</h3>
+        <div class="buyer">who pays — ${esc(n.buyer)}</div>
+        <div class="why">${esc(n.whyProfitable)}</div>
+        <div class="v1"><b>ship this first:</b> ${esc(n.v1Product)}</div>
+        <div class="price"><b>price point:</b> ${esc(n.pricePoint)}</div>
+      </div>`;
+    }
+    html += `</div>`;
+  }
 
   if (thin) {
     html += `<div class="banner"><b>evidence too thin to score</b>
@@ -1125,11 +1233,12 @@ async function switchTo(id, label) {
   const r = await (await fetch('/api/sessions/switch?' + new URLSearchParams({ id }))).json();
   if (r.error) { addLog(r.error, 'bad'); return; }
   await renderSessions();
-  await refresh();
+  const st = await refresh();
   $('results').innerHTML = '';
   log.innerHTML = ''; idle = true;
   addLog(`switched to "${label}"`, 'hot');
   if (r.collectorStopped) addLog('collector stopped — it was filling the previous session', 'bad');
+  seedBoard(st);
 }
 
 $('seshList').onclick = async (e) => {
@@ -1253,40 +1362,48 @@ function renderPipeline(st) {
     `${k.postsKnown || 0} read · ${k.recurringTopics || 0} recurring`);
 }
 
-/** One sentence saying what to do next. The page reports a lot of numbers; the
- *  user still has to know which of three buttons is the right one right now. */
-function renderNextUp(st) {
-  const el = $('nextUp');
+/** The Guide holds the top board slot: one sentence + one button saying the
+ *  single most useful next action, so the user never has to guess which of the
+ *  many buttons is the right one right now. */
+function renderGuide(st) {
+  const g = $('guidePost');
+  if (!g) return;
   const c = st.corpus || {}, k = st.knowledge || {};
   const live = (st.health || []).filter((x) => x.configured);
   const ran = live.filter((x) => x.lastRunAt > 0).length;
-  let msg = null;
 
-  if (!st.hasKey) {
-    msg = ['no API key', 'click <b>⚿ api key</b> in the sidebar — nothing can classify without one'];
+  let title, body = '', btn = null;
+
+  if (st.scanning) {
+    title = 'Scanning…'; body = 'The agents are working — watch the feed below.';
+  } else if (!st.hasKey) {
+    title = 'Add your API key'; body = 'Nothing can classify without one.';
+    btn = ['Add key', openKey];
   } else if (!st.configuredSources) {
-    msg = ['pick a target', 'find a niche above, then <b>send to collector</b> so it starts gathering'];
+    title = 'Pick a niche'; body = 'Choose who you want to find demand for — one niche per session.';
+    btn = ['Choose a niche', openSetup];
   } else if (!(st.collector && st.collector.running) && !ran) {
-    msg = [`${st.configuredSources} sources configured, none has run`,
-           'press <b>start collector</b> below — then leave it running for days',
-           'sourcesPanel'];
-  } else if (st.collector && st.collector.running && !ran) {
-    msg = ['collector is running', 'first results land within a few minutes'];
-  } else if (!c.posts) {
-    msg = ['collector is running but nothing collected yet', 'give it a few cycles'];
-  } else if ((k.recurringTopics || 0) < 10) {
-    msg = [`${k.recurringTopics || 0} topics have recurred`,
-           'keep collecting — whitespace needs topics that appear repeatedly, not once'];
+    title = 'Start collecting'; body = `${st.configuredSources} sources are set but none has run yet.`;
+    btn = ['Start collector', async () => {
+      const r = await (await fetch('/api/collector/start')).json();
+      if (r.error) addLog(r.error, 'bad');
+      else { addLog('collector started', 'hot'); startCollectorPolling(); await refresh(); }
+    }];
+  } else if (st.collector && st.collector.running) {
+    title = 'Collecting in the background'; body = 'The Scout gathers slowly — leave it running. First results land within minutes.';
+  } else if ((k.recurringTopics || 0) < 5 && (c.posts || 0) < 200) {
+    title = 'Keep collecting'; body = `${c.posts || 0} posts, ${k.recurringTopics || 0} recurring topics — need more repetition to score.`;
   } else {
-    msg = ['enough signal to read', 'run <b>scan corpus</b> and look at the whitespace table'];
+    title = 'Scan the corpus'; body = `Enough signal (${c.posts || 0} posts). Run the scan to score demand and surface profitable niches.`;
+    btn = ['Scan corpus', () => $('runCorpus').click()];
   }
-  el.innerHTML = `<div class="nextup"><b>next</b><span>${msg[0]} — ${msg[1]}</span></div>`;
-  if (msg[2]) {
-    el.querySelector('.nextup').style.cursor = 'pointer';
-    el.querySelector('.nextup').onclick = () => {
-      fold(msg[2], false);
-      $(msg[2]).scrollIntoView({ behavior: 'smooth', block: 'center' });
-    };
+
+  g.innerHTML = `<span class="who"><span class="ic">🧭</span>Guide</span>` +
+    `<span class="msg"><b>${esc(title)}</b><div class="sub">${body}</div>` +
+    (btn ? `<div class="cta"><button>${esc(btn[0])}</button></div>` : '') + `</span>`;
+  if (btn) {
+    const b = g.querySelector('button');
+    if (b) b.onclick = btn[1];
   }
 }
 
@@ -1426,7 +1543,7 @@ async function refresh() {
   renderCorpus(st.corpus);
   renderHealth(st.health);
   renderKnowledge(st.knowledge);
-  renderNextUp(st);
+  renderGuide(st);
   renderPipeline(st);
   renderKeyRail(st);
   renderCollector(st);
@@ -1449,13 +1566,35 @@ function stopPolling() {
   refresh().catch(() => {});
 }
 
+/** On load, replay the current state as a short board conversation so the page
+ *  doesn't open empty — the agents report what already happened. */
+function seedBoard(st) {
+  const b = $('board');
+  if (!b) return;
+  // Seed once — if any real agent post already exists (from a run or a prior
+  // seed), don't replay the state over it.
+  const hasAgent = [...b.children].some((e) =>
+    e.id !== 'guidePost' && /post (scout|analyst|skeptic|strategist)/.test(e.className));
+  if (hasAgent) return;
+  const c = st.corpus || {}, k = st.knowledge || {};
+  if (c.posts) postToBoard('scout', `${c.posts} posts collected · ${c.pending || 0} pending`);
+  if (k.postsKnown) postToBoard('analyst', `${k.postsKnown} posts classified into ${k.topicsKnown || 0} topics, ${k.recurringTopics || 0} recurring`);
+  if (st.result && st.result.niches && st.result.niches.length) {
+    postToBoard('strategist', `last scan surfaced ${st.result.niches.length} profitable niche suggestion${st.result.niches.length === 1 ? '' : 's'}`);
+  }
+  if (st.audit && st.audit.verdicts && st.audit.verdicts.length) {
+    postToBoard('skeptic', `challenged ${st.audit.verdicts.length} topics against real incumbents`);
+  }
+}
+
 async function boot() {
   try {
     const s = await refresh();
-
-    if (s.result) { render(s.result); addLog('loaded previous result'); }
-    if (s.scanning) { setBusy(true); startPolling(); addLog('a scan is already running', 'hot'); }
+    if (s.result) render(s.result);
+    if (s.scanning) { setBusy(true); startPolling(); }
     if (s.collector && s.collector.running) startCollectorPolling();
+    seedBoard(s);
+    idle = false; // board is live now — don't wipe it until an explicit run starts
   } catch (err) {
     addLog('could not reach server: ' + err.message, 'bad');
   }
