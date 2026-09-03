@@ -96,14 +96,19 @@ export async function runKnowledgeAgent(
   const skipped = curated.length - fresh.length
   if (fresh.length === 0) return { curated: curated.length, added: 0, skipped }
 
-  const rows = fresh.map((f) => ({
+  // Insert facts. `evidence` is optional AND its column may not exist yet (the
+  // migration may not have run) — so try with it, then fall back to the core
+  // columns, so a missing column degrades to facts-without-evidence instead of
+  // a failed run.
+  const core = fresh.map((f) => ({
     project_id: projectId,
     kind: f.kind as MemoryKind,
     fact: f.fact,
     weight: f.weight,
-    evidence: f.evidence ?? null,
   }))
-  const ins = await db.from('business_memory').insert(rows)
+  const full = fresh.map((f, i) => (f.evidence ? { ...core[i], evidence: f.evidence } : core[i]))
+  let ins = await db.from('business_memory').insert(full)
+  if (ins.error) ins = await db.from('business_memory').insert(core)
   if (ins.error) {
     console.warn('[knowledge-agent] insert failed:', ins.error.message)
     return { curated: curated.length, added: 0, skipped }

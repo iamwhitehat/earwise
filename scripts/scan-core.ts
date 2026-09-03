@@ -5,6 +5,8 @@
 // caller can stream it to a terminal or an SSE connection.
 
 import { readFileSync, writeFileSync, appendFileSync, existsSync, statSync, mkdirSync } from 'node:fs'
+import { pathToFileURL } from 'node:url'
+import { sep } from 'node:path'
 import Anthropic from '@anthropic-ai/sdk'
 import { redditConnector } from '../lib/sources/reddit'
 import { hackernewsConnector } from '../lib/sources/hackernews'
@@ -148,6 +150,17 @@ export type Classified = {
   dissatisfied: boolean
 }
 
+/** A single demand post — the raw evidence and, for outreach, the lead. */
+export type DemandPost = {
+  title: string
+  body: string
+  author: string
+  url: string
+  source: string
+  /** Whether the post named a price or said "I'd pay" — the profit signal. */
+  wtp: boolean
+}
+
 export type ScoredTopic = {
   topic: string
   posts: number
@@ -170,6 +183,9 @@ export type ScoredTopic = {
   /** whitespace shrunk toward neutral by confidence. Ranking uses this. */
   ranked: number
   examples: Array<{ title: string; url: string }>
+  /** The actual demand posts behind this topic — the people who voiced the
+   *  need, with author and link, so a finding is traceable to a lead. */
+  leads: DemandPost[]
 }
 
 /**
@@ -258,7 +274,9 @@ let envLoaded = false
 export function loadEnv(): void {
   if (envLoaded) return
   envLoaded = true
-  const p = new URL('../.env.local', import.meta.url)
+  const p = process.env.EARWISE_HOME
+    ? new URL('.env.local', pathToFileURL(process.env.EARWISE_HOME.endsWith(sep) ? process.env.EARWISE_HOME : process.env.EARWISE_HOME + sep))
+    : new URL('../.env.local', import.meta.url)
   if (!existsSync(p)) return
   for (const line of readFileSync(p, 'utf8').split(/\r?\n/)) {
     const m = /^([A-Z_]+)=(.*)$/.exec(line.trim())
@@ -759,6 +777,7 @@ type Agg = {
   wtp: number
   tools: Set<string>
   examples: Array<{ title: string; url: string }>
+  leads: DemandPost[]
 }
 
 /**
@@ -797,6 +816,7 @@ export function scoreTopics(
         wtp: 0,
         tools: new Set<string>(),
         examples: [],
+        leads: [],
       }
     a.total++
     if (c.category === 'tool_complaint') a.toolComplaint++
@@ -808,10 +828,23 @@ export function scoreTopics(
       if (c.tools.length === 0 && c.dissatisfied) a.demandNoTool++
     }
     if (c.dissatisfied) a.hate++
-    if (willingToPay(signal)) a.wtp++
+    const wtp = willingToPay(signal)
+    if (wtp) a.wtp++
     for (const t of c.tools) a.tools.add(t)
     if (a.examples.length < 3) {
       a.examples.push({ title: signal.title.slice(0, 140), url: signal.url })
+    }
+    // Keep the post itself, not just its title. A finding without the people
+    // behind it is unactionable: the author + link are the lead.
+    if (a.leads.length < 40) {
+      a.leads.push({
+        title: signal.title.slice(0, 200),
+        body: (signal.body || '').slice(0, 600),
+        author: signal.author || '',
+        url: signal.url || '',
+        source: signal.source,
+        wtp,
+      })
     }
     byTopic.set(c.topic, a)
   }
@@ -854,6 +887,7 @@ export function scoreTopics(
         ranked: rk,
         profitability: profitability(a.total, a.demand, a.wtp, a.demandNoTool, rk, !!gaps[topic]),
         examples: a.examples,
+        leads: a.leads,
       }
     })
     .sort((x, y) => y.ranked - x.ranked || y.posts - x.posts)
@@ -933,6 +967,9 @@ export type NicheSuggestion = {
   pricePoint: string
   /** How much measured evidence backs this suggestion. */
   confidence: 'high' | 'medium' | 'low'
+  /** The exact topic strings this niche is grounded in, so the UI can show
+   *  the actual posts (leads) behind the recommendation. */
+  topics?: string[]
 }
 
 const NICHES_TOOL: Anthropic.Messages.Tool = {
@@ -965,8 +1002,13 @@ const NICHES_TOOL: Anthropic.Messages.Tool = {
               enum: ['high', 'medium', 'low'],
               description: 'How much measured evidence supports this — high only when posts recur and name a budget or pain',
             },
+            topics: {
+              type: 'array',
+              items: { type: 'string' },
+              description: 'The EXACT topic strings from the input list this niche is grounded in, for traceability back to the source posts.',
+            },
           },
-          required: ['niche', 'buyer', 'whyProfitable', 'v1Product', 'pricePoint', 'confidence'],
+          required: ['niche', 'buyer', 'whyProfitable', 'v1Product', 'pricePoint', 'confidence', 'topics'],
         },
       },
     },
@@ -1011,7 +1053,8 @@ export async function synthesizeNiches(
       'recurring complaint.\n' +
       '- "high" confidence only when the same need recurs and the posts name a price or pain. ' +
       'Thin evidence = "low", and say why it is thin rather than inflating it.\n' +
-      '- If nothing is worth building, return an empty list. Fewer, sharper niches beat a padded list.',
+      '- If nothing is worth building, return an empty list. Fewer, sharper niches beat a padded list.\n' +
+      '- For every niche, set `topics` to the EXACT topic strings from the input you grounded it in.',
     tools: [NICHES_TOOL],
     tool_choice: { type: 'tool', name: 'suggest_niches' },
     messages: [{ role: 'user', content: `Measured demand:\n\n${evidence}` }],

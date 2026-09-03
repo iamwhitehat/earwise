@@ -116,3 +116,37 @@ describe('profitability — composite worth-building score', () => {
     expect(profitability(0, 0, 0, 0, 0, false)).toBeGreaterThanOrEqual(0)
   })
 })
+
+describe('scoreTopics — leads (the people behind a finding)', () => {
+  it('keeps demand posts with author and url', () => {
+    const a = sig(); a.author = 'alice'; a.title = 'anyone solved invoice generation?'
+    const b = sig(); b.author = 'bob'; b.title = 'tool to generate invoices please'
+    const rows = [
+      { signal: a, c: { category: 'pain_point', topic: 'invoicing', tools: [], dissatisfied: false } as Classified },
+      { signal: b, c: { category: 'feature_request', topic: 'invoicing', tools: [], dissatisfied: false } as Classified },
+    ]
+    const { scored } = scoreTopics(rows, 1)
+    expect(scored[0].leads.length).toBe(2)
+    expect(scored[0].leads.map(l => l.author).sort()).toEqual(['alice', 'bob'])
+    expect(scored[0].leads[0].url).toMatch(/^https:/)
+  })
+
+  it('flags a willing-to-pay lead', () => {
+    const p = sig(); p.title = 'willing to pay $30/mo for invoice automation'
+    const rows = [{ signal: p, c: { category: 'pain_point', topic: 'invoicing', tools: [], dissatisfied: false } as Classified }]
+    const { scored } = scoreTopics(rows, 1)
+    expect(scored[0].leads[0].wtp).toBe(true)
+  })
+
+  it('excludes non-demand posts from leads', () => {
+    const d = sig(); d.title = 'need invoice tool'
+    const o = sig(); o.title = 'check out my invoice blog'
+    const rows = [
+      { signal: d, c: { category: 'pain_point', topic: 'invoicing', tools: [], dissatisfied: false } as Classified },
+      { signal: o, c: { category: 'other', topic: '', tools: [], dissatisfied: false } as Classified },
+    ]
+    const { scored } = scoreTopics(rows, 1)
+    expect(scored[0].leads.length).toBe(1)
+    expect(scored[0].leads[0].title).toBe('need invoice tool')
+  })
+})

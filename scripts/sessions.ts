@@ -12,8 +12,15 @@
 //   scan-output/sessions/<id>/         corpus, knowledge, state, result
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync, renameSync, rmSync, readdirSync } from 'node:fs'
+import { pathToFileURL } from 'node:url'
+import { sep } from 'node:path'
 
-const ROOT = new URL('../scan-output/', import.meta.url)
+// Data home: EARWISE_HOME (set by the packaged desktop app) points scan-output/
+// at a writable dir; otherwise it lives next to the scripts (dev).
+const DATA_HOME = process.env.EARWISE_HOME
+const ROOT = DATA_HOME
+  ? new URL('scan-output/', pathToFileURL(DATA_HOME.endsWith(sep) ? DATA_HOME : DATA_HOME + sep))
+  : new URL('../scan-output/', import.meta.url)
 const INDEX = new URL('sessions.json', ROOT)
 const DIR = new URL('sessions/', ROOT)
 

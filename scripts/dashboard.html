@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>earwise — demand scanner</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cg fill='%23d97757'%3E%3Crect x='0' y='0' width='6' height='6' rx='1.4'/%3E%3Crect x='9' y='0' width='6' height='6' rx='1.4'/%3E%3Crect x='18' y='0' width='6' height='6' rx='1.4'/%3E%3Crect x='0' y='9' width='6' height='6' rx='1.4'/%3E%3Crect x='18' y='9' width='6' height='6' rx='1.4'/%3E%3Crect x='0' y='18' width='6' height='6' rx='1.4'/%3E%3Crect x='9' y='18' width='6' height='6' rx='1.4'/%3E%3Crect x='18' y='18' width='6' height='6' rx='1.4'/%3E%3C/g%3E%3Crect x='9' y='9' width='6' height='6' rx='1.4' fill='none' stroke='%23d97757' stroke-width='1.6' stroke-dasharray='2.2 1.6'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect x='3' y='3' width='18' height='18' rx='5.6' fill='none' stroke='%23d97757' stroke-width='3'/%3E%3Ccircle cx='12' cy='12' r='3' fill='%231f1a17'/%3E%3C/svg%3E">
 <style>
   :root {
     --bg:        #faf9f5;
@@ -204,6 +204,19 @@
   .niche .v1 { font-size: 12.5px; }
   .niche .v1 b, .niche .price b { color: var(--accent); }
   .niche .price { font-size: 12px; color: var(--muted); margin-top: 5px; }
+  .niche-actions { margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; }
+  .niche-actions button { padding: 5px 12px; font-size: 12px; }
+  .niche .leads { margin-top: 10px; border-top: 1px dashed var(--line-soft); padding-top: 8px; }
+  .niche .leads summary { cursor: pointer; font-size: 12px; color: var(--accent); font-weight: 600; list-style: none; user-select: none; }
+  .niche .leads summary::before { content: '▸ '; }
+  .niche .leads[open] summary::before { content: '▾ '; }
+  .niche .leads summary .cnt { color: var(--muted); font-weight: 400; }
+  .lead { padding: 8px 0; border-bottom: 1px solid var(--line-soft); }
+  .lead:last-child { border-bottom: 0; }
+  .lead a { font-size: 13px; font-weight: 600; }
+  .lead .who { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+  .lead .body { font-size: 12.5px; color: var(--muted); margin-top: 4px; line-height: 1.5; overflow-wrap: anywhere; }
+  .wtp { display: inline-block; font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 8px; background: var(--accent-bg); color: var(--accent); margin-left: 6px; vertical-align: middle; }
 
   /* ---- agent board ---- */
   #boardPanel { margin-bottom: 16px; }
@@ -528,8 +541,202 @@
   button.busy .bm { opacity: .75; font-variant-numeric: tabular-nums; margin-left: 2px; }
   button.ghost.busy { color: var(--accent); }
 </style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style id="futuristic">
+/* ============ EARWISE · AURORA THEME — utopian / futuristic ============ */
+:root {
+  --bg:        #05060d;
+  --panel:     rgba(255,255,255,0.045);
+  --sunk:      rgba(255,255,255,0.035);
+  --line:      rgba(255,255,255,0.10);
+  --line-soft: rgba(255,255,255,0.065);
+  --ink:       #eaeef7;
+  --muted:     #97a0bd;
+  --faint:     #5d6682;
+  --accent:    #ff7a59;
+  --accent-dim:#ff4d6d;
+  --accent-bg: rgba(255,122,89,0.13);
+  --warn:      #fbbf24;
+  --warn-bg:   rgba(251,191,36,0.12);
+  --warn-line: rgba(251,191,36,0.35);
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+  --sans: "Space Grotesk", "Sora", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --radius: 15px;
+  --glow: 0 0 22px rgba(255,122,89,.35);
+}
+* { box-sizing: border-box; }
+html { background: transparent !important; }
+body {
+  background: rgba(5,6,13,0.86) !important;
+  margin: 0; color: var(--ink);
+  font: 14px/1.6 var(--sans);
+  -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+  overflow-x: hidden;
+}
+
+/* ---- aurora background layers ---- */
+#stars { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+.aurora { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; filter: blur(90px) saturate(130%); }
+.aurora i { position: absolute; border-radius: 50%; opacity: .55; mix-blend-mode: screen; }
+.aurora i:nth-child(1){ width:56vw;height:56vw;left:-16vw;top:-22vw;background:radial-gradient(circle,rgba(167,139,250,.6),transparent 66%);animation:drift1 27s ease-in-out infinite; }
+.aurora i:nth-child(2){ width:50vw;height:50vw;right:-13vw;top:-10vw;background:radial-gradient(circle,rgba(34,211,238,.45),transparent 66%);animation:drift2 34s ease-in-out infinite; }
+.aurora i:nth-child(3){ width:48vw;height:48vw;left:18vw;bottom:-24vw;background:radial-gradient(circle,rgba(255,122,89,.48),transparent 66%);animation:drift3 40s ease-in-out infinite; }
+@keyframes drift1{0%,100%{transform:translate(0,0)}50%{transform:translate(9vw,7vw)}}
+@keyframes drift2{0%,100%{transform:translate(0,0)}50%{transform:translate(-8vw,10vw)}}
+@keyframes drift3{0%,100%{transform:translate(0,0)}50%{transform:translate(7vw,-8vw)}}
+@media (prefers-reduced-motion: reduce){ .aurora i { animation: none; } }
+
+/* ---- content sits above the background ---- */
+.wrap { position: relative; z-index: 2; }
+
+/* ---- glass panels ---- */
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  box-shadow: 0 10px 44px rgba(0,0,0,.38), inset 0 1px 0 rgba(255,255,255,.06);
+  padding: 18px 20px; margin-bottom: 16px;
+  transition: border-color .35s ease, box-shadow .35s ease, transform .35s ease;
+}
+.panel:hover { border-color: rgba(255,255,255,.17); }
+.panel > h2 {
+  font: 600 11px var(--sans); letter-spacing: .18em; text-transform: uppercase;
+  color: var(--faint); margin: 0 0 16px;
+}
+.panel > h2::before, h2::before { content: "◆ "; color: var(--accent); }
+
+/* ---- header / typography ---- */
+h1 { font: 600 17px var(--sans); letter-spacing: -0.02em; }
+h1 .mark { color: var(--accent); filter: drop-shadow(0 0 12px rgba(255,122,89,.75)); }
+h1 .wordmark { background: linear-gradient(100deg,#ffd9c4,#ff7a59 40%,#ff4d6d); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
+.tagline { color: var(--muted); }
+h3, .setupTitle { font-family: var(--sans); }
+.setupTitle { font-size: 20px; font-weight: 600; letter-spacing: -0.02em; }
+
+/* ---- buttons ---- */
+button {
+  background: linear-gradient(135deg,#ff7a59,#ff4d6d);
+  color: #fff; border: 0; border-radius: 10px;
+  padding: 9px 20px; font: 600 13px var(--sans); cursor: pointer;
+  box-shadow: 0 5px 20px rgba(255,77,109,.32);
+  transition: transform .15s ease, box-shadow .2s ease, filter .2s ease;
+}
+button:hover:not(:disabled){ transform: translateY(-1px); box-shadow: 0 8px 28px rgba(255,77,109,.48); filter: brightness(1.06); }
+button:disabled { opacity: .4; cursor: not-allowed; }
+button.ghost { background: transparent; color: var(--accent); box-shadow: inset 0 0 0 1px rgba(255,122,89,.5); }
+button.ghost:hover:not(:disabled){ background: var(--accent-bg); box-shadow: inset 0 0 0 1px var(--accent); }
+
+/* ---- inputs / select ---- */
+.inputline {
+  background: rgba(255,255,255,.04); border: 1px solid var(--line-soft);
+  border-radius: 10px; backdrop-filter: blur(8px);
+}
+.inputline:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(255,122,89,.14); }
+input[type=text], input[type=number], input[type=password], select { color: var(--ink); }
+input::placeholder { color: var(--faint); }
+select { background: rgba(255,255,255,.045); border: 1px solid var(--line-soft); border-radius: 10px; }
+#log { background: rgba(255,255,255,.03); border: 1px solid var(--line-soft); border-radius: 10px; color: var(--muted); }
+
+/* ---- rail (session sidebar) ---- */
+#rail {
+  background: rgba(8,10,22,.72);
+  border-right: 1px solid var(--line);
+  backdrop-filter: blur(26px) saturate(150%);
+  -webkit-backdrop-filter: blur(26px) saturate(150%);
+}
+.railItem:hover, .sesh:hover { background: rgba(255,255,255,.05); }
+.sesh.on { background: var(--accent-bg); border-color: rgba(255,122,89,.4); }
+#newSesh { box-shadow: inset 0 0 0 1px rgba(255,122,89,.5); }
+#railToggle { background: var(--accent-bg); color: var(--accent); border-color: rgba(255,122,89,.5); }
+
+/* ---- pipeline strip ---- */
+.pipe .st { background: var(--panel); border-color: var(--line); backdrop-filter: blur(14px); }
+.pipe .st.now { background: var(--accent-bg); border-color: var(--accent); box-shadow: 0 0 26px rgba(255,122,89,.28); z-index: 1; }
+.pipe .st .v { font-family: var(--sans); }
+
+/* ---- stats ---- */
+.stat b { font-family: var(--sans); font-weight: 600; }
+
+/* ---- agent board ---- */
+.post {
+  background: rgba(255,255,255,.03); border: 1px solid var(--line-soft);
+  border-radius: 12px; backdrop-filter: blur(8px);
+}
+.post.guide { background: var(--accent-bg); border-color: rgba(255,122,89,.42); }
+
+/* ---- niches / leads ---- */
+.niche {
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: var(--radius); backdrop-filter: blur(14px);
+  transition: border-color .3s ease, box-shadow .3s ease, transform .3s ease;
+}
+.niche:hover { border-color: rgba(255,122,89,.45); box-shadow: 0 10px 34px rgba(0,0,0,.42); transform: translateY(-2px); }
+.niche .conf.high { background: var(--accent-bg); color: var(--accent); box-shadow: 0 0 12px rgba(255,122,89,.4); }
+.wtp { background: var(--accent-bg); color: var(--accent); }
+
+/* ---- knowledge / chips / trend ---- */
+.chip { border-radius: 20px; }
+.chip.on { background: var(--accent-bg); border-color: var(--accent); color: var(--accent); }
+.kt span { background: rgba(255,255,255,.03); border-color: var(--line-soft); border-radius: 8px; }
+.trend i { background: linear-gradient(180deg,#ff7a59,#ff4d6d); }
+
+/* ---- misc surfaces ---- */
+.banner { border-radius: 12px; }
+.collBar { background: rgba(255,255,255,.03); border-color: var(--line-soft); border-radius: 10px; }
+.provider { background: var(--accent-bg); border-color: rgba(255,122,89,.5); border-radius: 20px; }
+.nextup { background: var(--accent-bg); border-left-color: var(--accent); border-radius: 0 10px 10px 0; }
+
+/* ---- links ---- */
+a { color: var(--accent); }
+.ex a:hover, .lead a:hover { color: var(--accent); }
+
+/* ---- scrollbar ---- */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,.12); border-radius: 6px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.22); }
+
+/* ---- entrance animation ---- */
+.panel, .niche { animation: rise .5s cubic-bezier(.2,.7,.3,1) both; }
+@keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce){ .panel, .niche { animation: none; } }
+
+/* ---- header ---- */
+header { padding-top: 0; }
+.titleRow { padding-top: 0; }
+
+/* ---- Malwarebytes-style fixed dashboard: no page scroll, 2-col card grid ---- */
+body { height: 100vh; overflow: hidden; }
+.wrap {
+  max-width: none !important;
+  margin: 0 !important;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-auto-rows: min-content;
+  gap: 12px;
+  padding: 4px 22px 20px;
+}
+body.with-rail .wrap { margin-left: 232px !important; }
+body:not(.with-rail) .wrap { padding-top: 0 !important; }
+#rail.hidden ~ .wrap { margin-left: 0 !important; }
+header { grid-column: 1 / -1; margin-bottom: 8px; }
+.pipe { margin: 12px 0 4px; }
+.panel { padding: 14px 16px; }
+.panel { margin-bottom: 0 !important; }
+#boardPanel, #knowledgePanel, #corpusPanel, #outputPanel { max-height: 260px; overflow-y: auto; }
+#results { grid-column: 1 / -1; max-height: 360px; overflow-y: auto; }
+#niches, #kTopics { max-height: 220px; overflow-y: auto; }
+#rail { top: 0; padding-top: 12px; }
+#railToggle { top: 12px; }
+</style>
 </head>
 <body class="with-rail">
+<canvas id="stars" aria-hidden="true"></canvas>
+<div class="aurora" aria-hidden="true"><i></i><i></i><i></i></div>
 <aside id="rail">
   <div class="head"><h3>sessions</h3>
     <button id="railClose" title="hide sessions">&laquo; hide</button></div>
@@ -548,7 +755,7 @@
 <div class="wrap">
   <header>
     <div class="titleRow">
-      <h1><svg class="mark" viewBox="0 0 24 24" width="21" height="21" aria-hidden="true"><g fill="currentColor"><rect x="0"  y="0"  width="6" height="6" rx="1.4"/><rect x="9"  y="0"  width="6" height="6" rx="1.4"/><rect x="18" y="0"  width="6" height="6" rx="1.4"/><rect x="0"  y="9"  width="6" height="6" rx="1.4"/><rect x="18" y="9"  width="6" height="6" rx="1.4"/><rect x="0"  y="18" width="6" height="6" rx="1.4"/><rect x="9"  y="18" width="6" height="6" rx="1.4"/><rect x="18" y="18" width="6" height="6" rx="1.4"/></g><rect class="gap" x="9" y="9" width="6" height="6" rx="1.4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="2.2 1.6"/></svg><span class="wordmark">earwise</span><span class="sub">demand scanner</span></h1>
+      <h1><svg class="mark" viewBox="0 0 24 24" width="21" height="21" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5.6" fill="none" stroke="currentColor" stroke-width="3"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg><span class="wordmark">earwise</span><span class="sub">demand scanner</span></h1>
       <button id="detailToggle">show details</button>
     </div>
     <div class="pipe" id="pipeline"></div>
@@ -699,6 +906,100 @@ function esc(s) {
   return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 }
 
+// ---- leads & export --------------------------------------------------------
+// A niche is only worth something if you can act on it. These turn a finding
+// back into the actual people (author + link + words) who voiced the need, and
+// let you copy or download them as a lead list.
+
+let lastNiches = [];
+let lastTopics = [];
+
+function copyText(t) {
+  if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(t);
+  const ta = document.createElement('textarea');
+  ta.value = t; ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta); ta.select();
+  try { document.execCommand('copy'); } catch (e) { /* ignore */ }
+  document.body.removeChild(ta);
+  return Promise.resolve();
+}
+
+function downloadText(name, text) {
+  const blob = new Blob([text], { type: 'text/markdown;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function flash(btn) {
+  if (!btn) return;
+  const o = btn.textContent; btn.textContent = 'copied ✓';
+  setTimeout(() => { btn.textContent = o; }, 1200);
+}
+
+/** The demand posts (leads) a niche is grounded in, joined via its topic list. */
+function nicheLeads(n, topics) {
+  const seen = new Set(); const out = [];
+  const add = (arr) => (arr || []).forEach(p => {
+    if (p && p.url && !seen.has(p.url)) { seen.add(p.url); out.push(p); }
+  });
+  const byName = new Map((topics || []).map(t => [t.topic, t]));
+  for (const name of (Array.isArray(n.topics) ? n.topics : [])) {
+    const t = byName.get(name); if (t) add(t.leads);
+  }
+  // Fallback: the model may reword a topic. Match on shared words.
+  if (!out.length) {
+    const words = (n.niche || '').toLowerCase().split(/[^a-z0-9]+/).filter(w => w.length > 3);
+    for (const t of (topics || [])) {
+      if (words.some(w => (t.topic || '').toLowerCase().includes(w))) add(t.leads);
+    }
+  }
+  return out;
+}
+
+function leadLine(p) {
+  return `- [${p.title}](${p.url}) — u/${p.author}${p.wtp ? ' 💰 willing to pay' : ''}`;
+}
+
+function nicheMarkdown(n, topics) {
+  const lines = [`## ${n.niche}`, '', `- **who pays:** ${n.buyer}`,
+    `- **price point:** ${n.pricePoint}`, `- **confidence:** ${n.confidence}`, '',
+    n.whyProfitable, '', `**ship first:** ${n.v1Product}`, ''];
+  const leads = nicheLeads(n, topics);
+  if (leads.length) {
+    lines.push(`**leads (${leads.length}):**`);
+    for (const p of leads) {
+      lines.push(leadLine(p));
+      if (p.body) lines.push(`  > ${p.body.replace(/\s+/g, ' ').slice(0, 180)}`);
+    }
+    lines.push('');
+  }
+  return lines.join('\n');
+}
+
+function reportMarkdown() {
+  const head = ['# Demand report', '', `Generated ${new Date().toLocaleString()}`, ''];
+  const body = lastNiches.map(n => nicheMarkdown(n, lastTopics));
+  return head.concat(body).join('\n');
+}
+
+function copyNiche(i, btn) {
+  const n = lastNiches[i]; if (!n) return;
+  copyText(nicheMarkdown(n, lastTopics)).then(() => flash(btn));
+}
+
+function dlNiche(i) {
+  const n = lastNiches[i]; if (!n) return;
+  const name = 'niche-' + (n.niche || i).replace(/[^a-z0-9]+/gi, '-').toLowerCase() + '.md';
+  downloadText(name, nicheMarkdown(n, lastTopics));
+}
+
+function copyReport(btn) { copyText(reportMarkdown()).then(() => flash(btn)); }
+function dlReport() { downloadText('demand-report.md', reportMarkdown()); }
+
 // ---- agents ----------------------------------------------------------------
 // The pipeline is a small team, not a black box. Each agent has a name and a
 // voice; the board shows them posting as they work, and the Guide holds the top
@@ -759,6 +1060,8 @@ function render(r) {
   r.topics = r.topics || [];
   r.themes = r.themes || [];
   r.niches = r.niches || [];
+  lastNiches = r.niches;
+  lastTopics = r.topics;
   const when = r.finishedAt ? new Date(r.finishedAt) : null;
   const stamp = when && !isNaN(when) ? when.toLocaleString() : 'earlier run';
   const minPosts = (r.sources && r.sources.minTopicPosts) || 2;
@@ -834,8 +1137,27 @@ function render(r) {
 
   if (r.niches.length) {
     html += `<div class="panel"><h2>most profitable niches</h2>
-      <div class="hint" style="margin:-6px 0 12px">ranked by measured demand, willingness-to-pay and a concrete unserved gap — grounded in the posts, not invented</div>`;
-    for (const n of r.niches) {
+      <div class="hint" style="margin:-6px 0 12px">ranked by measured demand, willingness-to-pay and a concrete unserved gap — grounded in the posts, not invented
+      <div class="niche-actions" style="margin-top:8px">
+        <button onclick="copyReport(this)">copy full report</button>
+        <button onclick="dlReport()" class="ghost">download .md</button>
+      </div></div>`;
+    r.niches.forEach((n, i) => {
+      const leads = nicheLeads(n, r.topics);
+      const leadBlock = leads.length
+        ? `<div class="niche-actions">
+            <button onclick="copyNiche(${i}, this)">copy leads</button>
+            <button onclick="dlNiche(${i})" class="ghost">.md</button>
+          </div>
+          <details class="leads">
+            <summary><span class="cnt">${leads.length} lead${leads.length === 1 ? '' : 's'} — the people who said it</span></summary>
+            ${leads.map(p => `<div class="lead">
+              <a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.title)}</a>${p.wtp ? '<span class="wtp">💰 willing to pay</span>' : ''}
+              <div class="who">u/${esc(p.author)}</div>
+              ${p.body ? `<div class="body">${esc(p.body)}</div>` : ''}
+            </div>`).join('')}
+          </details>`
+        : `<div class="niche-actions"><button onclick="copyNiche(${i}, this)">copy niche</button></div>`;
       html += `<div class="niche">
         <span class="conf ${esc(n.confidence || 'low')}">${esc(n.confidence || 'low')}</span>
         <h3>${esc(n.niche)}</h3>
@@ -843,8 +1165,9 @@ function render(r) {
         <div class="why">${esc(n.whyProfitable)}</div>
         <div class="v1"><b>ship this first:</b> ${esc(n.v1Product)}</div>
         <div class="price"><b>price point:</b> ${esc(n.pricePoint)}</div>
+        ${leadBlock}
       </div>`;
-    }
+    });
     html += `</div>`;
   }
 
@@ -2055,6 +2378,50 @@ $('runCorpus').onclick = () => startScan({
 initPanels();
 renderSessions().catch(() => {});
 boot();
+</script>
+<script>
+// Living-data background — a constellation of demand signals that drift and
+// connect, gently repelled by the cursor. Pure decoration; no data flows here.
+(function () {
+  var c = document.getElementById('stars')
+  if (!c) return
+  var x = c.getContext('2d')
+  var w = 0, h = 0, N = 64, pts = [], mx = -9999, my = -9999
+  function resize() { w = c.width = innerWidth; h = c.height = innerHeight }
+  resize()
+  addEventListener('resize', resize)
+  for (var i = 0; i < N; i++) {
+    pts.push({ x: Math.random() * w, y: Math.random() * h, vx: (Math.random() - .5) * .3, vy: (Math.random() - .5) * .3, r: Math.random() * 1.5 + .4 })
+  }
+  addEventListener('mousemove', function (e) { mx = e.clientX; my = e.clientY })
+  addEventListener('mouseout', function () { mx = my = -9999 })
+  var reduce = matchMedia('(prefers-reduced-motion: reduce)').matches
+  function tick() {
+    x.clearRect(0, 0, w, h)
+    for (var i = 0; i < N; i++) {
+      var p = pts[i]
+      if (!reduce) {
+        p.x += p.vx; p.y += p.vy
+        if (p.x < 0 || p.x > w) p.vx *= -1
+        if (p.y < 0 || p.y > h) p.vy *= -1
+        var dm = Math.hypot(p.x - mx, p.y - my)
+        if (dm < 150) { p.x += (p.x - mx) / dm * .4; p.y += (p.y - my) / dm * .4 }
+      }
+      x.beginPath(); x.arc(p.x, p.y, p.r, 0, 6.283)
+      x.fillStyle = 'rgba(150,180,255,.45)'; x.fill()
+    }
+    for (var i = 0; i < N; i++) for (var j = i + 1; j < N; j++) {
+      var a = pts[i], b = pts[j], d = Math.hypot(a.x - b.x, a.y - b.y)
+      if (d < 120) {
+        x.beginPath(); x.moveTo(a.x, a.y); x.lineTo(b.x, b.y)
+        x.strokeStyle = 'rgba(150,180,255,' + (.16 * (1 - d / 120)) + ')'
+        x.lineWidth = 1; x.stroke()
+      }
+    }
+    requestAnimationFrame(tick)
+  }
+  tick()
+})()
 </script>
 </body>
 </html>
