@@ -8,7 +8,11 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "build:exe": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-exe.ps1"
+    "dashboard": "tsx scripts/dashboard.ts",
+    "scan": "tsx scripts/scan-standalone.ts",
+    "build:exe": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-exe.ps1",
+    "collect": "tsx scripts/collector.ts",
+    "collect:once": "tsx scripts/collector.ts --once"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.100.1",
@@ -29,6 +33,7 @@
     "eslint-config-next": "16.2.6",
     "postject": "^1.0.0-alpha.6",
     "tailwindcss": "^4",
+    "tsx": "^4.23.13",
     "typescript": "^5",
     "vitest": "^4.1.8"
   }

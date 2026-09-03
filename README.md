@@ -138,6 +138,38 @@ Treat the ranking as a place to start looking, not a verdict.
 
 ---
 
+## The local tool (`scripts/`)
+
+The Next.js app needs Supabase. The pipeline in `scripts/` does not — it runs standalone
+with a local dashboard and JSON on disk.
+
+```bash
+npm run dashboard    # http://localhost:4321
+npm run collect      # background collector
+npm test
+```
+
+**Sessions.** One isolated workspace per niche — its own corpus, knowledge, collector
+config and results. This is not filing: topic vocabulary only accumulates inside a single
+domain, so mixing niches in one corpus stops the whitespace model from ever running.
+
+**Two clocks.** Collecting is free and rate-limited; classifying costs money. The
+collector gathers continuously into an append-only corpus; classification runs in batches
+when you ask, and never reads the same post twice.
+
+**It gets better with use.** Every classification is cached by post id, and the topic
+vocabulary it has established is fed back into the classifier so labels collide instead
+of fragmenting. A review pass merges wording variants into an alias map that applies to
+every future run. The claim is measurable — topic reuse rate is reported each run,
+alongside effective-topic count so vocabulary collapse is visible rather than flattering.
+
+**What it refuses to do.** Show a whitespace score when no topic recurred. Call a
+throttled source missing. Present the niche planner's prior as measured demand. Publish
+collected post bodies — `scan-output/` is gitignored, and the rule is aggregate and link,
+never mirror.
+
+See [AGENTS.md](AGENTS.md) for architecture, invariants and rate-limit constraints.
+
 ## License
 
 MIT

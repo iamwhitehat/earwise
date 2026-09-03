@@ -51,3 +51,15 @@ next-env.d.ts
 # build:exe artifacts
 /reddit-reader.exe
 /scripts/sea-blob.blob
+
+# Collected data. Mirrored post bodies, authors and comments — never publish.
+# The README's own rule: aggregate and link, never mirror.
+/scan-output/
+
+# Ad-hoc research scripts kept locally; not part of the tool.
+/scripts/research-*.mjs
+/scripts/extract-artifacts.mjs
+/scripts/recover-writes.mjs
+/scripts/write-artifacts.mjs
+/scripts/sea-*.js
+/scripts/sea-*.json
