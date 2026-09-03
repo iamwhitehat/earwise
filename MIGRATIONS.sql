@@ -137,6 +137,9 @@ create table if not exists business_memory (
   created_at timestamptz not null default now()
 );
 create index if not exists business_memory_project_idx on business_memory (project_id);
+-- Knowledge Agent: durable market knowledge curated into business_memory
+-- (kind/fact/weight + a short source note for drill-to-evidence).
+alter table business_memory add column if not exists evidence text;
 
 create table if not exists opportunities (
   id bigserial primary key,

@@ -17,6 +17,11 @@ export type MemoryKind =
   | 'constraint'
   | 'url'
   | 'learned'
+  | 'market_pain'
+  | 'incumbent'
+  | 'buyer_language'
+  | 'momentum'
+  | 'gap'
 
 export type MemoryFact = {
   kind: MemoryKind
@@ -80,6 +85,11 @@ const KIND_LABEL: Record<MemoryKind, string> = {
   constraint: 'Constraint',
   url: 'URL',
   learned: 'Learned',
+  market_pain: 'Market pain',
+  incumbent: 'Incumbent',
+  buyer_language: 'Buyer language',
+  momentum: 'Momentum',
+  gap: 'Opportunity',
 }
 
 const DIGEST_MAX_FACTS = 40

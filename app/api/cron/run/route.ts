@@ -10,6 +10,7 @@ import { backfillCanonicalTopics } from '@/lib/topics-db'
 import { materializeOpportunities } from '@/lib/advantage-materialize'
 import { aggregateInsights, renderAggregatedForClaude } from '@/lib/insights-aggregator'
 import { memoryDigest, replaceLearnedFact } from '@/lib/memory-db'
+import { runKnowledgeAgent } from '@/lib/knowledge-agent'
 import { loadRecalibration, loadWhatWorkedGuidance } from '@/lib/recalibrate-db'
 import { WHATS_WORKING_PREFIX } from '@/lib/recalibrate'
 import { buildDigest } from '@/lib/digest'
@@ -190,6 +191,14 @@ export async function POST(req: NextRequest) {
     }
   } catch (err) {
     summary.insightsError = err instanceof Error ? err.message : 'insights failed'
+  }
+
+  // 4b. Knowledge Agent: rewatch the market and curate durable knowledge into
+  //     business_memory (deduped, so memory compounds instead of duplicating).
+  try {
+    summary.knowledge = await runKnowledgeAgent(db)
+  } catch (err) {
+    summary.knowledgeError = err instanceof Error ? err.message : 'knowledge agent failed'
   }
 
   // 5. Build + store the weekly digest, then email it.
