@@ -2,16 +2,18 @@
 // there's unmet demand and people are unhappy with incumbents, low when the
 // space is already crowded with solutions. Pure + testable; compute-on-read
 // (no storage). Inputs are normalized 0..1 signals derived from the topic's
-// posts (categories + deep-scan tools/quotes).
+// posts.
 //
 //   whitespace = sigmoid( wU·unansweredDemand
 //                       + wD·incumbentDissatisfaction
 //                       − wS·solutionSaturation
 //                       − bias )
 //
-// All three inputs are evidence-gated on deep scans where solution info
-// actually exists, so a topic with no deep scans lands near the neutral-low
-// middle rather than falsely reading as wide-open.
+// NOTE: forum posts cannot reveal incumbents nobody typed — "what do you use
+// for X" names no tool, which is silence about the asker, not the market.
+// unansweredDemand therefore counts only posts that are DISSATISFIED and name
+// no tool, and solutionSaturation is fed incumbents the QA Skeptic names from
+// world knowledge. A topic never scores wide-open on post-body silence alone.
 
 const W_UNANSWERED = 1.5
 const W_DISSATISFACTION = 1.3
@@ -47,7 +49,9 @@ export type WhitespaceCounts = {
   deepCount: number
   /** Deep-scanned pain/feature posts. */
   deepDemand: number
-  /** Of `deepDemand`, how many mention no tool (nobody's solving it). */
+  /** Of `deepDemand`, how many are dissatisfied AND name no tool — the only
+   *  posts that evidence a genuine gap. A seeker who names no tool but is not
+   *  unhappy is not proof the space is empty. */
   deepDemandNoTool: number
   /** 'hate'-type quotes across the topic's deep scans. */
   hateQuotes: number
@@ -60,8 +64,8 @@ const SATURATION_FULL = 8
 
 /**
  * Normalize raw per-topic counts into the 0..1 whitespace inputs.
- *  - unansweredDemand: fraction of deep demand posts with no tool mentioned
- *    (falls back to 0 when there's no deep demand evidence).
+ *  - unansweredDemand: fraction of demand posts that are dissatisfied AND name
+ *    no tool — the only honest "nobody is solving this" signal (0 when none).
  *  - incumbentDissatisfaction: tool-complaint share + hate-quote density.
  *  - solutionSaturation: distinct tools vs SATURATION_FULL.
  */

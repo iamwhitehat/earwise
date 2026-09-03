@@ -19,7 +19,7 @@
 //   - every merge is recorded in knowledge.merges with what it absorbed
 
 import Anthropic from '@anthropic-ai/sdk'
-import { model, type Log } from './scan-core'
+import { modelFor, type Log } from './scan-core'
 import {
   loadKnowledge, saveKnowledge, mergeTopics, concentration, type Knowledge,
 } from './knowledge'
@@ -106,7 +106,7 @@ export async function reviewVocabulary(log: Log, k?: Knowledge): Promise<ReviewR
 
   const list = entries.map(([n, t]) => `- ${n} (${t.count})`).join('\n')
   const res = await anthropic.messages.create({
-    model: model(),
+    model: modelFor('review'),
     max_tokens: 1500,
     system: SYSTEM,
     tools: [MERGE_TOOL],

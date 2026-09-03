@@ -3,7 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Demand Scanner</title>
+<title>earwise — demand scanner</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cg fill='%23d97757'%3E%3Crect x='0' y='0' width='6' height='6' rx='1.4'/%3E%3Crect x='9' y='0' width='6' height='6' rx='1.4'/%3E%3Crect x='18' y='0' width='6' height='6' rx='1.4'/%3E%3Crect x='0' y='9' width='6' height='6' rx='1.4'/%3E%3Crect x='18' y='9' width='6' height='6' rx='1.4'/%3E%3Crect x='0' y='18' width='6' height='6' rx='1.4'/%3E%3Crect x='9' y='18' width='6' height='6' rx='1.4'/%3E%3Crect x='18' y='18' width='6' height='6' rx='1.4'/%3E%3C/g%3E%3Crect x='9' y='9' width='6' height='6' rx='1.4' fill='none' stroke='%23d97757' stroke-width='1.6' stroke-dasharray='2.2 1.6'/%3E%3C/svg%3E">
 <style>
   :root {
     --bg:        #faf9f5;
@@ -50,8 +51,19 @@
 
   /* ---- header ---- */
   header { margin-bottom: 34px; }
-  h1 { font-size: 16px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
-  h1 .glyph { color: var(--accent); margin-right: 9px; }
+  h1 { font-size: 16px; font-weight: 600; margin: 0; letter-spacing: -0.01em;
+       display: flex; align-items: center; gap: 10px; }
+  /* The mark is the product: a full field with one opening left in it. The
+     dashed cell is the whitespace the tool looks for. */
+  h1 .mark { color: var(--accent); flex: 0 0 auto; }
+  h1 .mark .gap { animation: seek 3.4s ease-in-out infinite; transform-origin: 12px 12px; }
+  @keyframes seek {
+    0%, 72%, 100% { opacity: .55; }
+    80%           { opacity: 1; }
+  }
+  h1 .wordmark { letter-spacing: .01em; }
+  h1 .sub { color: var(--faint); font-weight: 400; font-size: 13px; }
+  @media (prefers-reduced-motion: reduce) { h1 .mark .gap { animation: none; } }
   .tagline { color: var(--muted); font-size: 13px; margin: 6px 0 0 25px; }
 
   /* ---- panels ---- */
@@ -155,6 +167,8 @@
   .ex { margin-top: 5px; }
   .ex a { color: var(--faint); text-decoration: none; font-size: 11.5px; }
   .ex a:hover { color: var(--accent); text-decoration: underline; }
+  .resgap { margin-top: 5px; font-size: 12px; color: var(--accent); line-height: 1.45; }
+  .resgap b { font-weight: 600; }
   .scroll { overflow-x: auto; }
 
   /* ---- themes ---- */
@@ -208,7 +222,7 @@
   @keyframes fade { from { opacity: 0; transform: translateY(-2px); } to { opacity: 1; } }
   .working .g {
     color: var(--accent); display: inline-block;
-    width: 1ch; text-align: center; font-size: 15px;
+    width: 3ch; letter-spacing: 1px; font-size: 12px;
   }
   .working .v { color: var(--ink); }
   .working .m { color: var(--faint); font-size: 12px; font-variant-numeric: tabular-nums; }
@@ -467,7 +481,7 @@
   button.busy:hover .bg::after { content: " stop"; }
   button.busy:hover { background: var(--warn); }
   button.ghost.busy:hover { background: var(--warn); color: #fff; box-shadow: none; }
-  button.busy .bg { display: inline-block; width: 1ch; text-align: center; }
+  button.busy .bg { display: inline-block; width: 3ch; letter-spacing: 1px; font-size: 11px; }
   button.busy .bm { opacity: .75; font-variant-numeric: tabular-nums; margin-left: 2px; }
   button.ghost.busy { color: var(--accent); }
 </style>
@@ -491,7 +505,7 @@
 <div class="wrap">
   <header>
     <div class="titleRow">
-      <h1><span class="glyph">✻</span>demand scanner</h1>
+      <h1><svg class="mark" viewBox="0 0 24 24" width="21" height="21" aria-hidden="true"><g fill="currentColor"><rect x="0"  y="0"  width="6" height="6" rx="1.4"/><rect x="9"  y="0"  width="6" height="6" rx="1.4"/><rect x="18" y="0"  width="6" height="6" rx="1.4"/><rect x="0"  y="9"  width="6" height="6" rx="1.4"/><rect x="18" y="9"  width="6" height="6" rx="1.4"/><rect x="0"  y="18" width="6" height="6" rx="1.4"/><rect x="9"  y="18" width="6" height="6" rx="1.4"/><rect x="18" y="18" width="6" height="6" rx="1.4"/></g><rect class="gap" x="9" y="9" width="6" height="6" rx="1.4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="2.2 1.6"/></svg><span class="wordmark">earwise</span><span class="sub">demand scanner</span></h1>
       <button id="detailToggle">show details</button>
     </div>
     <div id="nextUp"></div>
@@ -735,14 +749,25 @@ function render(r) {
   }
 
   if (r.topics.length) {
-    html += `<div class="panel"><h2>topics by whitespace</h2><div class="scroll"><table>
-      <tr><th>openness</th><th>topic</th><th>posts</th><th>unanswered</th><th>existing tools</th></tr>`;
+    html += `<div class="panel"><h2>topics by whitespace</h2>
+      <div class="hint" style="margin:-6px 0 12px">ranked by openness weighted by evidence — every topic is challenged against real incumbents, so a high score means the gap survived scrutiny</div>
+      <div class="scroll"><table>
+      <tr><th>openness</th><th>evidence</th><th>topic</th><th>posts</th><th>unmet</th><th>existing tools</th></tr>`;
     for (const t of r.topics.slice(0, 40)) {
+      // Rank by the evidence-weighted score; show the raw one beside it so a
+      // confident low score is distinguishable from a thin high one.
+      const rk = t.ranked !== undefined ? t.ranked : t.whitespace;
+      const cf = t.confidence !== undefined ? t.confidence : 1;
       html += `<tr>
-        <td><div class="barwrap"><span class="score">${t.whitespace.toFixed(3)}</span>
-          <span class="bar"><i style="width:${Math.round(t.whitespace * 100)}%"></i></span></div></td>
+        <td><div class="barwrap"><span class="score">${rk.toFixed(3)}</span>
+          <span class="bar"><i style="width:${Math.round(rk * 100)}%"></i></span></div>
+          <div class="ex detail">raw ${t.whitespace.toFixed(3)}</div></td>
+        <td><div class="barwrap"><span class="score" style="color:var(--muted)">${Math.round(cf * 100)}%</span>
+          <span class="bar" style="width:34px"><i style="width:${Math.round(cf * 100)}%;background:var(--muted)"></i></span></div></td>
         <td>${esc(t.topic)}${t.examples && t.examples[0]
           ? `<div class="ex"><a href="${esc(t.examples[0].url)}" target="_blank" rel="noopener">${esc(t.examples[0].title)}</a></div>`
+          : ''}${t.residualGap
+          ? `<div class="resgap"><b>still open:</b> ${esc(t.residualGap)}</div>`
           : ''}</td>
         <td class="num">${t.posts}</td>
         <td class="num">${t.unanswered}/${t.demand}</td>
@@ -1440,7 +1465,9 @@ async function boot() {
 // The asterisk grows and shrinks, the gerund rotates, the clock ticks — so a
 // long call reads as something alive rather than a frozen page.
 
-const GLYPHS = ['·', '✢', '✳', '∗', '✻', '✽', '✻', '∗', '✳', '✢'];
+// A cell sweeping across a row — reading a field looking for the empty one.
+// Every frame is the same width so nothing jitters.
+const GLYPHS = ['▪▫▫', '▫▪▫', '▫▫▪', '▫▪▫'];
 
 // Verbs are keyed by real pipeline stage, not picked at random: during a scan
 // we know whether it is fetching or classifying, so the word can carry
@@ -1494,7 +1521,7 @@ function makeButtonWorker(btn, stage, onCancel) {
       vi = Math.floor(Math.random() * pool.length);
       btn.classList.add('busy');
       btn.title = 'click to stop';
-      btn.innerHTML = '<span class="bg">·</span> <span class="bv"></span><span class="bm"></span>';
+      btn.innerHTML = '<span class="bg">▪▫▫</span> <span class="bv"></span><span class="bm"></span>';
       const g = btn.querySelector('.bg'), v = btn.querySelector('.bv'), m = btn.querySelector('.bm');
       const say = () => { v.textContent = pool[vi % pool.length] + '…'; };
       const tick = () => {
@@ -1598,7 +1625,7 @@ function renderNiches(list) {
       b.disabled = true;
       $('trace').classList.add('on');
       $('trace').innerHTML = '';
-      const head = traceStep('✻', `checking r/ communities named for <b>${esc(n.niche)}</b>`);
+      const head = traceStep('▪', `checking r/ communities named for <b>${esc(n.niche)}</b>`);
       const live = [];
       await new Promise((resolve) => {
         const src = new EventSource('/api/verify?' + new URLSearchParams({
@@ -1620,7 +1647,7 @@ function renderNiches(list) {
         src.addEventListener('error', () => { src.close(); resolve(); });
       });
       head.className = 'step ok';
-      traceStep('✻', `starting session with ${live.length} sources`, 'ok');
+      traceStep('▪', `starting session with ${live.length} sources`, 'ok');
       await startSessionWith(n.niche, { ...n, subreddits: live.length ? live : n.subreddits });
       return;
     }
@@ -1682,7 +1709,7 @@ function plan(auto) {
   planSrc.addEventListener('step', (e) => {
     const st = JSON.parse(e.data);
     if (st.stage === 'thinking') {
-      current = traceStep('✻', esc(st.detail || 'thinking'));
+      current = traceStep('▪', esc(st.detail || 'thinking'));
     } else if (st.stage === 'niche' && st.niche) {
       found.push(st.niche);
       // Communities are checked when a niche is PICKED, not here — so this
@@ -1694,7 +1721,7 @@ function plan(auto) {
       renderNiches(found);
     } else if (st.stage === 'done') {
       if (current) current.className = 'step ok';
-      traceStep('✻', `${esc(st.detail || '')} · ${Math.round((Date.now() - t0) / 1000)}s`, 'ok');
+      traceStep('▪', `${esc(st.detail || '')} · ${Math.round((Date.now() - t0) / 1000)}s`, 'ok');
     }
   });
 

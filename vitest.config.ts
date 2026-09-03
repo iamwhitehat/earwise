@@ -4,7 +4,7 @@ import { defineConfig } from 'vitest/config'
 // no network). Anything importing `server-only` is intentionally excluded.
 export default defineConfig({
   test: {
-    include: ['lib/**/*.test.ts'],
+    include: ['lib/**/*.test.ts', 'scripts/**/*.test.ts'],
     environment: 'node',
   },
 })

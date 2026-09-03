@@ -15,6 +15,7 @@ import { readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { loadKnowledge, knowledgeStats, topTopics, topTools } from './knowledge'
 import { reviewVocabulary } from './review'
 import { enrichWithComments, loadComments } from './comments'
+import { auditClassifications, challengeTopics, loadAudit, loadRefutedTools, loadRefutedGaps } from './audit'
 import { checkKey, upsertEnv, maskKey } from './provider'
 import {
   listSessions, createSession, setActive, renameSession, deleteSession, sessionSummary, activeId,
@@ -122,6 +123,9 @@ function parseOptions(url: URL): ScanOptions {
     soQueries: list('soQueries'),
     minTopicPosts: Number.isFinite(min) && min >= 1 ? Math.floor(min) : 2,
     useCorpus: url.searchParams.get('useCorpus') === '1',
+    // QA verdicts are injected here, not imported by the pipeline.
+    refutedTools: loadRefutedTools(),
+    refutedGaps: loadRefutedGaps(),
     corpusFilter: list('corpusFilter'),
     corpusLimit: Number.isFinite(limit) && limit > 0 ? Math.floor(limit) : 600,
   }
@@ -155,6 +159,13 @@ async function handleScan(res: ServerResponse, opts: ScanOptions) {
   res.on('close', () => mine.abort())
   // Keep the connection alive through the long Reddit gaps.
   const ping = setInterval(() => res.write(': ping\n\n'), 15_000)
+  // QA: after scoring, challenge every scoreable topic with world knowledge and
+  // fold the verdicts back in as saturation. Injected here — not imported by
+  // scan-core — so the pipeline never depends on the QA layer (circular dep).
+  opts.challenge = async (topics, log) => {
+    await challengeTopics(topics, log, topics.length)
+    return { tools: loadRefutedTools(), gaps: loadRefutedGaps() }
+  }
   try {
     const result = await runScan(
       opts,
@@ -194,6 +205,7 @@ const server = createServer(async (req: IncomingMessage, res: ServerResponse) =>
         log: collectorLog.slice(-12),
       },
       corpus: corpusStats(),
+      audit: loadAudit(),
       comments: (() => {
         const c = loadComments()
         const keys = Object.keys(c)
@@ -321,6 +333,28 @@ const server = createServer(async (req: IncomingMessage, res: ServerResponse) =>
     if (scanning) return send(res, 409, { error: 'finish or stop the running scan first' })
     const ok = deleteSession(url.searchParams.get('id') ?? '')
     return send(res, ok ? 200 : 400, ok ? { deleted: true } : { error: 'cannot delete the last session' })
+  }
+
+  // QA: blind re-labelling, then an attempt to refute whatever scored open.
+  if (url.pathname === '/api/audit') {
+    res.writeHead(200, {
+      'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive',
+    })
+    const emit = (event: string, data: unknown) =>
+      res.write(`event: ${event}
+data: ${JSON.stringify(data)}
+
+`)
+    try {
+      const log = (msg: string) => emit('log', { msg })
+      const run = await auditClassifications(log)
+      const last = readResult()
+      const verdicts = last?.topics?.length ? await challengeTopics(last.topics, log) : []
+      emit('done', { run, verdicts })
+    } catch (err) {
+      emit('error', { message: (err as Error).message })
+    }
+    return res.end()
   }
 
   if (url.pathname === '/api/comments') {

@@ -12,6 +12,8 @@ import { stackoverflowConnector } from '../lib/sources/stackoverflow'
 import { whitespaceFromCounts, type WhitespaceCounts } from '../lib/whitespace'
 import { canonicalTopic } from '../lib/topics'
 import { dedupePosts, countDuplicates } from '../lib/dedup'
+import { findFirstMatch, INTENT_PATTERNS } from '../lib/intent-patterns'
+import { makerPreflag } from '../lib/buyer-intent'
 import type { RawSignal } from '../lib/sources/types'
 import { activeDir } from './sessions'
 import {
@@ -27,6 +29,37 @@ export const DEFAULT_MODEL = 'claude-haiku-4-5-20251001'
 export function model(): string {
   loadEnv()
   return process.env.SCAN_MODEL || DEFAULT_MODEL
+}
+
+/**
+ * Model per call site, chosen by measurement rather than by "bigger is better".
+ *
+ *   classify  — Haiku. Measured against Sonnet on an identical batch: same
+ *               fragmentation (19 distinct topics of 24), and Haiku's labels
+ *               were SHORTER and more general ("career respect" vs "programmer
+ *               respect discussion"), which is what makes topics collide. It is
+ *               also ~95% of all spend, so the economics agree.
+ *
+ *   plan      — Sonnet. Haiku invented r/EV (does not exist); of the names that
+ *               could be verified, Haiku was 1-in-3 fake and Sonnet 0-in-6. A
+ *               fabricated subreddit silently collects nothing for weeks.
+ *
+ *   review    — Sonnet. On a 161-topic vocabulary Haiku proposed 36 merges and
+ *               invented the canonical name every time, so all 36 were rejected
+ *               and the pass did nothing. Sonnet copied strings exactly.
+ *
+ *   themes    — Haiku for now. NOT measured; left alone rather than upgraded on
+ *               a hunch.
+ *
+ * One call each for plan/review/themes, so the cost of the stronger model is
+ * negligible next to classification.
+ */
+export const JUDGEMENT_MODEL = 'claude-sonnet-5'
+
+export function modelFor(task: 'classify' | 'plan' | 'review' | 'themes'): string {
+  loadEnv()
+  if (process.env.SCAN_MODEL) return process.env.SCAN_MODEL
+  return task === 'plan' || task === 'review' ? JUDGEMENT_MODEL : DEFAULT_MODEL
 }
 const BATCH = 12
 const GAP_MS = 2_000
@@ -59,6 +92,32 @@ export type ScanOptions = {
   /** Restrict a corpus scan to these subreddits / source ids. Empty = all.
    *  Without this, a corpus holding two niches answers neither question. */
   corpusFilter?: string[]
+  /** Incumbent products a QA pass named when refuting a topic, keyed by topic.
+   *  Supplied by the caller so the pipeline never depends on the QA layer. */
+  refutedTools?: RefutedTools
+  /** Residual gap (still-unserved sub-segment) per refuted topic. */
+  refutedGaps?: Record<string, string>
+  /** After scoring, challenge each scoreable topic with world knowledge and
+   *  return incumbents + residual gaps to fold into saturation. Provided by
+   *  the caller (dashboard) because the QA layer sits above the pipeline. */
+  challenge?: (topics: ScoredTopic[], log: Log) => Promise<ChallengeResult>
+  /** Only classify posts that voice buying intent. Roughly half of a subreddit
+   *  feed is news and chat; classifying it costs money and buries real needs
+   *  under the subreddit's own subject. */
+  demandOnly?: boolean
+}
+
+/**
+ * Cheap, deterministic read of whether a post voices a need — the same gate
+ * lib/try-find.ts uses before spending a model call. Negation-aware, and
+ * self-promo ("just launched my app") is excluded: a maker announcing a tool
+ * is not a buyer asking for one.
+ */
+export function looksLikeDemand(s: RawSignal): boolean {
+  const text = `${s.title}
+${s.body || ''}`
+  if (makerPreflag(text)) return false
+  return findFirstMatch(text, INTENT_PATTERNS) !== null
 }
 
 /** A corpus post — a RawSignal plus when the collector first saw it. */
@@ -89,8 +148,38 @@ export type ScoredTopic = {
   unanswered: number
   distinctTools: number
   tools: string[]
+  /** Raw openness from lib/whitespace.ts. */
   whitespace: number
+  /** Products a QA pass named when it refuted this topic, if any. */
+  refutedBy?: string[]
+  /** The still-unserved sub-segment the QA Skeptic named, when it refuted. */
+  residualGap?: string
+  /** 0..1 — how much evidence stands behind that score. */
+  confidence: number
+  /** whitespace shrunk toward neutral by confidence. Ranking uses this. */
+  ranked: number
   examples: Array<{ title: string; url: string }>
+}
+
+/**
+ * Evidence shrinkage.
+ *
+ * Two posts naming no tool produce unansweredDemand = 1.0 and saturation = 0,
+ * which is a near-perfect "nobody has built this" — from two people. Without
+ * this, the thinnest evidence always outranks the strongest: a 2-post topic
+ * scored 0.998 while an 18-post topic naming 18 tools scored 0.244.
+ *
+ * So the score is pulled toward neutral in proportion to how little evidence
+ * supports it. n/(n+K) reaches half weight at K posts. Nothing is hidden —
+ * the raw score is still reported next to it.
+ */
+const CONFIDENCE_K = 6
+export function evidenceConfidence(posts: number): number {
+  return posts / (posts + CONFIDENCE_K)
+}
+export function shrinkToNeutral(whitespace: number, posts: number): number {
+  const c = evidenceConfidence(posts)
+  return 0.5 + (whitespace - 0.5) * c
 }
 
 export type Theme = {
@@ -494,12 +583,13 @@ export async function classifyAll(
   log: Log,
   signal?: AbortSignal,
   onProgress?: Progress,
+  demandOnly = false,
 ): Promise<ClassifyOutcome> {
   const k = loadKnowledge()
   const vocabBefore = Object.keys(k.topics).length
 
   const rows: Array<{ signal: RawSignal; c: Classified }> = []
-  const todo: RawSignal[] = []
+  let todo: RawSignal[] = []
   for (const s of signals) {
     const hit = k.posts[postKey(s.source, s.externalId)]
     if (hit) rows.push({ signal: s, c: hit })
@@ -507,6 +597,23 @@ export async function classifyAll(
   }
   const fromCache = rows.length
   if (fromCache) log(`${fromCache} of ${signals.length} already known — not re-classifying`)
+
+  // Split on the cheap gate before spending anything. Demand-shaped posts go
+  // first either way, so an interrupted or capped run spends its budget on the
+  // posts that can actually produce a finding.
+  if (todo.length) {
+    const wanted = todo.filter(looksLikeDemand)
+    const rest = todo.filter((x) => !looksLikeDemand(x))
+    const pct = Math.round((wanted.length / todo.length) * 100)
+    if (demandOnly) {
+      log(`${wanted.length} of ${todo.length} voice a need (${pct}%) — skipping the rest`)
+      todo = wanted
+    } else {
+      log(`${wanted.length} of ${todo.length} voice a need (${pct}%) — classifying those first`)
+      todo = [...wanted, ...rest]
+    }
+  }
+
   if (!todo.length) {
     log('nothing new to classify')
     return { rows, fromCache, billed: 0, reusedTopic: 0, newTopic: 0, vocabBefore, vocabAfter: vocabBefore }
@@ -543,7 +650,7 @@ export async function classifyAll(
       .join('\n\n')
     try {
       const res = await anthropic.messages.create({
-        model: model(),
+        model: modelFor('classify'),
         max_tokens: 2000,
         system,
         tools: [CLASSIFY_TOOL],
@@ -616,9 +723,26 @@ type Agg = {
   examples: Array<{ title: string; url: string }>
 }
 
+/**
+ * Products the Skeptic named when it refuted a topic, keyed by topic.
+ *
+ * This is the correction for the tool's worst failure. `unansweredDemand` counts
+ * posts that named no tool — but somebody asking "what do you use for pipeline
+ * tracking" does not list CRMs in their question, so silence was read as
+ * opportunity. A QA run refuted 100% of the top five topics with real products
+ * (Pipedrive, Otter.ai, Jira). Those names ARE the missing saturation evidence,
+ * so they are folded in here rather than left in a report nobody re-reads.
+ */
+export type RefutedTools = Record<string, string[]>
+/** What a challenge pass returns: incumbents to fold into saturation, plus the
+ *  residual gap each refuted topic still leaves unserved. */
+export type ChallengeResult = { tools: RefutedTools; gaps: Record<string, string> }
+
 export function scoreTopics(
   classified: Array<{ signal: RawSignal; c: Classified }>,
   minPosts: number,
+  refuted: RefutedTools = {},
+  gaps: Record<string, string> = {},
 ): { scored: ScoredTopic[]; distinct: number; singletons: number; topicInput: Array<[string, number, string]> } {
   const byTopic = new Map<string, Agg>()
 
@@ -639,7 +763,10 @@ export function scoreTopics(
     if (c.category === 'tool_complaint') a.toolComplaint++
     if (c.category === 'pain_point' || c.category === 'feature_request') {
       a.demand++
-      if (c.tools.length === 0) a.demandNoTool++
+      // "No tool named" is not "unmet" — a seeker asking "what do you use
+      // for X" names no tool *because they're asking*. Only an unhappy post
+      // that points at no incumbent is evidence nothing addresses it.
+      if (c.tools.length === 0 && c.dissatisfied) a.demandNoTool++
     }
     if (c.dissatisfied) a.hate++
     for (const t of c.tools) a.tools.add(t)
@@ -652,27 +779,41 @@ export function scoreTopics(
   const scored: ScoredTopic[] = Array.from(byTopic.entries())
     .filter(([, a]) => a.total >= minPosts)
     .map(([topic, a]) => {
+      // Known incumbents count as saturation even when no post named them.
+      const known = new Set(a.tools)
+      for (const t of refuted[topic] ?? []) known.add(t)
+      const refutedCount = (refuted[topic] ?? []).length
+
+      // If the market is known to be served, "nobody named a tool" is not
+      // evidence of an opening — it is evidence the asker did not type one.
+      const unmet = refutedCount > 0 ? 0 : a.demandNoTool
+
       const counts: WhitespaceCounts = {
         total: a.total,
         toolComplaintPosts: a.toolComplaint,
         deepCount: a.total,
         deepDemand: a.demand,
-        deepDemandNoTool: a.demandNoTool,
+        deepDemandNoTool: unmet,
         hateQuotes: a.hate,
-        distinctTools: a.tools.size,
+        distinctTools: known.size,
       }
+      const ws = whitespaceFromCounts(counts)
       return {
         topic,
         posts: a.total,
         demand: a.demand,
         unanswered: a.demandNoTool,
-        distinctTools: a.tools.size,
-        tools: Array.from(a.tools).slice(0, 8),
-        whitespace: whitespaceFromCounts(counts),
+        distinctTools: known.size,
+        tools: Array.from(known).slice(0, 8),
+        refutedBy: refutedCount ? (refuted[topic] ?? []).slice(0, 8) : undefined,
+        residualGap: gaps[topic] || undefined,
+        whitespace: ws,
+        confidence: evidenceConfidence(a.total),
+        ranked: shrinkToNeutral(ws, a.total),
         examples: a.examples,
       }
     })
-    .sort((x, y) => y.whitespace - x.whitespace || y.posts - x.posts)
+    .sort((x, y) => y.ranked - x.ranked || y.posts - x.posts)
 
   const topicInput: Array<[string, number, string]> = Array.from(byTopic.entries())
     .sort((x, y) => y[1].total - x[1].total)
@@ -715,7 +856,7 @@ export async function clusterThemes(topicInput: Array<[string, number, string]>)
   const anthropic = client()
   const list = topicInput.map(([t, n, ex]) => `- ${t} (${n})${ex ? `: "${ex}"` : ''}`).join('\n')
   const res = await anthropic.messages.create({
-    model: model(),
+    model: modelFor('themes'),
     max_tokens: 2000,
     system:
       'You are a skeptical product strategist for a solo founder who ships small, low- or ' +
@@ -856,7 +997,7 @@ export async function planSources(
     detail: niche.trim() ? `mapping niches around "${niche.trim()}"` : 'looking for markets where money moves',
   })
   const res = await anthropic.messages.create({
-    model: model(),
+    model: modelFor('plan'),
     max_tokens: 2500,
     system: PLAN_SYSTEM,
     tools: [PLAN_TOOL],
@@ -911,14 +1052,8 @@ export async function runScan(
     if (!corpus.length) {
       throw new Error('Corpus is empty — run the collector first (npm run collect).')
     }
-    // Posts already classified leave the pool BEFORE the limit is applied.
-    // Otherwise "classify newest 100" spends its budget on 98 cached posts and
-    // reads 2 new ones — a cost cap that caps nothing.
     const done = loadKnowledge().posts
     const totalInCorpus = corpus.length
-    corpus = corpus.filter((e) => !done[postKey(e.source, e.externalId)])
-    const already = totalInCorpus - corpus.length
-    if (already) log(`${already} of ${totalInCorpus} already done — excluded`)
 
     const want = (opts.corpusFilter ?? []).map((x) => x.toLowerCase()).filter(Boolean)
     let pool = corpus
@@ -930,12 +1065,21 @@ export async function runScan(
       log(`filter [${want.join(', ')}] — ${pool.length} of ${corpus.length} posts match`)
       if (!pool.length) throw new Error('No corpus posts match that filter.')
     }
-    // Newest first, so a cost cap keeps the most recent window rather than a
-    // random slice of history. Filter first, or the cap could spend the whole
-    // budget on posts the filter would have excluded.
-    const sorted = pool.slice().sort((a, b) => b.firstSeenAt - a.firstSeenAt)
-    signals = opts.corpusLimit ? sorted.slice(0, opts.corpusLimit) : sorted
-    log(`${signals.length} new post${signals.length === 1 ? '' : 's'} to classify`)
+    // Scoring is free computation over cached classifications, so every
+    // matching post goes down the pipeline. Only the UNREAD ones are capped —
+    // otherwise a fully-classified corpus could never be re-scored, and the
+    // cost cap would be spent on posts that cost nothing.
+    const isDone = (e: CorpusEntry) => !!done[postKey(e.source, e.externalId)]
+    const cached = pool.filter(isDone)
+    const fresh = pool
+      .filter((e) => !isDone(e))
+      .sort((a, b) => b.firstSeenAt - a.firstSeenAt)
+    const take = opts.corpusLimit ? fresh.slice(0, opts.corpusLimit) : fresh
+    signals = [...cached, ...take]
+    log(
+      `${totalInCorpus} in corpus · ${cached.length} already read · ` +
+        `${take.length} new to classify${fresh.length > take.length ? ` (${fresh.length - take.length} held back by the cap)` : ''}`,
+    )
   } else {
     log('collecting…')
     signals = await collect(opts, log, signal)
@@ -944,7 +1088,7 @@ export async function runScan(
   if (!signals.length) {
     throw new Error(
       opts.useCorpus
-        ? 'Nothing new — every corpus post matching that filter is already classified.'
+        ? 'No corpus posts match that filter — collect some first.'
         : 'No signals to classify.',
     )
   }
@@ -958,7 +1102,7 @@ export async function runScan(
   }
 
   log('classifying…')
-  const outcome = await classifyAll(signals, log, signal, onProgress)
+  const outcome = await classifyAll(signals, log, signal, onProgress, opts.demandOnly)
   const classified = outcome.rows
 
   const categories: Record<string, number> = {}
@@ -971,8 +1115,33 @@ export async function runScan(
   )
 
   log('scoring…')
-  const { scored, distinct, singletons, topicInput } = scoreTopics(classified, opts.minTopicPosts)
+  let refuted = opts.refutedTools ?? {}
+  const gaps: Record<string, string> = { ...(opts.refutedGaps ?? {}) }
+  const nRef = Object.keys(refuted).length
+  if (nRef) log(`${nRef} topic${nRef === 1 ? '' : 's'} carry QA-known incumbents — counted as saturation`)
+  const { scored: initialScored, distinct, singletons, topicInput } = scoreTopics(
+    classified,
+    opts.minTopicPosts,
+    refuted,
+    gaps,
+  )
+  let scored = initialScored
   log(`${distinct} distinct topics, ${scored.length} scoreable (>=${opts.minTopicPosts} posts)`)
+
+  // The Skeptic is the honest saturation signal. Forum posts cannot reveal
+  // incumbents nobody typed — somebody asking "what do you use for X" names
+  // nothing, which the old formula read as a wide-open gap. Challenge every
+  // scoreable topic with world knowledge, then re-score with the verdicts
+  // folded in. Verdicts are cached per topic, so this costs one Sonnet call
+  // per NEW topic, not per scan.
+  if (opts.challenge && scored.length && !signal?.aborted) {
+    log('challenging scoreable topics — do incumbents already exist?')
+    const res = await opts.challenge(scored, log)
+    Object.assign(refuted, res.tools)
+    Object.assign(gaps, res.gaps)
+    scored = scoreTopics(classified, opts.minTopicPosts, refuted, gaps).scored
+    log('re-scored with QA-known incumbents folded into saturation')
+  }
 
   log('clustering…')
   const themes = signal?.aborted ? [] : await clusterThemes(topicInput)
