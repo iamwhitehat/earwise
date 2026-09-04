@@ -546,13 +546,13 @@
 /* ============ EARWISE · AURORA THEME — utopian / futuristic ============ */
 :root {
   --bg:        #05060d;
-  --panel:     rgba(255,255,255,0.07);
-  --sunk:      rgba(255,255,255,0.035);
-  --line:      rgba(255,255,255,0.14);
-  --line-soft: rgba(255,255,255,0.065);
-  --ink:       #eaeef7;
-  --muted:     #97a0bd;
-  --faint:     #5d6682;
+  --panel:     #161a24;
+  --sunk:      #11141c;
+  --line:      #262c3a;
+  --line-soft: #1e2330;
+  --ink:       #eef1f7;
+  --muted:     #a8b0c4;
+  --faint:     #79839c;
   --accent:    #ff7a59;
   --accent-dim:#ff4d6d;
   --accent-bg: rgba(255,122,89,0.13);
@@ -567,7 +567,7 @@
 * { box-sizing: border-box; }
 html { background: transparent !important; }
 body {
-  background: rgba(5,6,13,0.86) !important;
+  background: #0d1017 !important;
   margin: 0; color: var(--ink);
   font: 14px/1.6 var(--sans);
   -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
@@ -575,9 +575,12 @@ body {
 }
 
 /* ---- aurora background layers ---- */
-#stars { position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: .5; }
-.aurora { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; filter: blur(90px) saturate(130%); }
-.aurora i { position: absolute; border-radius: 50%; opacity: .28; mix-blend-mode: screen; }
+/* The background is atmosphere, not decoration. It was loud enough to tint
+   identical cards different colours and draw stars through text — which reads as
+   a screensaver, not a tool. Nearly flat now. */
+#stars { position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: .16; }
+.aurora { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; filter: blur(110px) saturate(105%); }
+.aurora i { position: absolute; border-radius: 50%; opacity: .13; mix-blend-mode: screen; }
 .aurora i:nth-child(1){ width:56vw;height:56vw;left:-16vw;top:-22vw;background:radial-gradient(circle,rgba(167,139,250,.6),transparent 66%);animation:drift1 27s ease-in-out infinite; }
 .aurora i:nth-child(2){ width:50vw;height:50vw;right:-13vw;top:-10vw;background:radial-gradient(circle,rgba(34,211,238,.45),transparent 66%);animation:drift2 34s ease-in-out infinite; }
 .aurora i:nth-child(3){ width:48vw;height:48vw;left:18vw;bottom:-24vw;background:radial-gradient(circle,rgba(255,122,89,.48),transparent 66%);animation:drift3 40s ease-in-out infinite; }
@@ -589,23 +592,25 @@ body {
 /* ---- content sits above the background ---- */
 .wrap { position: relative; z-index: 2; }
 
-/* ---- glass panels ---- */
+/* Cards are solid surfaces, not frosted glass. Translucency let the animated
+   background through and made two identical panels look like different
+   components depending on what drifted behind them. */
 .panel {
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: var(--radius);
-  backdrop-filter: blur(20px) saturate(150%);
-  -webkit-backdrop-filter: blur(20px) saturate(150%);
-  box-shadow: 0 10px 44px rgba(0,0,0,.38), inset 0 1px 0 rgba(255,255,255,.06);
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(0,0,0,.3);
   padding: 18px 20px; margin-bottom: 16px;
-  transition: border-color .35s ease, box-shadow .35s ease, transform .35s ease;
+  transition: border-color .2s ease;
 }
-.panel:hover { border-color: rgba(255,255,255,.17); }
+.panel:hover { border-color: #313848; }
+/* Sentence case at a readable size. The old 11px .18em uppercase was the
+   hardest-to-read setting in the file and it was on every heading. */
 .panel > h2 {
-  font: 600 11px var(--sans); letter-spacing: .18em; text-transform: uppercase;
-  color: var(--faint); margin: 0 0 16px;
+  font: 600 13px var(--sans); letter-spacing: 0; text-transform: none;
+  color: var(--ink); margin: 0 0 14px;
 }
-.panel > h2::before, h2::before { content: "◆ "; color: var(--accent); }
+.panel > h2::before, h2::before { content: none; }
 
 /* ---- header / typography ---- */
 h1 { font: 600 17px var(--sans); letter-spacing: -0.02em; }
@@ -615,29 +620,31 @@ h1 .wordmark { background: linear-gradient(100deg,#ffd9c4,#ff7a59 40%,#ff4d6d); 
 h3, .setupTitle { font-family: var(--sans); }
 .setupTitle { font-size: 20px; font-weight: 600; letter-spacing: -0.02em; }
 
-/* ---- buttons ---- */
+/* One flat accent, a real hit target, no neon glow. 15px so a 60-year-old can
+   read it and a 14-year-old still takes it seriously. */
 button {
-  background: linear-gradient(135deg,#ff7a59,#ff4d6d);
-  color: #fff; border: 0; border-radius: 10px;
-  padding: 9px 20px; font: 600 13px var(--sans); cursor: pointer;
-  box-shadow: 0 5px 20px rgba(255,77,109,.32);
-  transition: transform .15s ease, box-shadow .2s ease, filter .2s ease;
+  background: #e2543a;
+  color: #fff; border: 0; border-radius: 8px;
+  padding: 11px 22px; font: 600 15px var(--sans); cursor: pointer;
+  box-shadow: none;
+  transition: background .15s ease;
 }
-button:hover:not(:disabled){ transform: translateY(-1px); box-shadow: 0 8px 28px rgba(255,77,109,.48); filter: brightness(1.06); }
+button:hover:not(:disabled){ background: #f0674c; transform: none; box-shadow: none; filter: none; }
 button:disabled { opacity: .4; cursor: not-allowed; }
-button.ghost { background: transparent; color: var(--accent); box-shadow: inset 0 0 0 1px rgba(255,122,89,.5); }
-button.ghost:hover:not(:disabled){ background: var(--accent-bg); box-shadow: inset 0 0 0 1px var(--accent); }
+button.ghost { background: transparent; color: var(--muted); box-shadow: inset 0 0 0 1px var(--line); font-weight: 500; }
+button.ghost:hover:not(:disabled){ background: var(--sunk); color: var(--ink); box-shadow: inset 0 0 0 1px #313848; }
 
-/* ---- inputs / select ---- */
+/* ---- inputs ---- */
 .inputline {
-  background: rgba(255,255,255,.04); border: 1px solid var(--line-soft);
-  border-radius: 10px; backdrop-filter: blur(8px);
+  background: var(--sunk); border: 1px solid var(--line);
+  border-radius: 8px; backdrop-filter: none;
 }
 .inputline:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(255,122,89,.14); }
-input[type=text], input[type=number], input[type=password], select { color: var(--ink); }
+input[type=text], input[type=number], input[type=password], select { color: var(--ink); font-size: 14px; }
 input::placeholder { color: var(--faint); }
-select { background: rgba(255,255,255,.045); border: 1px solid var(--line-soft); border-radius: 10px; }
-#log { background: rgba(255,255,255,.03); border: 1px solid var(--line-soft); border-radius: 10px; color: var(--muted); }
+select { background: var(--sunk); border: 1px solid var(--line); border-radius: 8px; }
+#log { background: var(--sunk); border: 1px solid var(--line); border-radius: 8px; color: var(--muted); }
+label { font-size: 13px; color: var(--muted); }
 
 /* ---- rail (session sidebar) ---- */
 #rail {
@@ -651,29 +658,35 @@ select { background: rgba(255,255,255,.045); border: 1px solid var(--line-soft);
 #newSesh { box-shadow: inset 0 0 0 1px rgba(255,122,89,.5); }
 #railToggle { background: var(--accent-bg); color: var(--accent); border-color: rgba(255,122,89,.5); }
 
-/* ---- pipeline strip ---- */
-.pipe .st { background: var(--panel); border-color: var(--line); backdrop-filter: blur(14px); }
-.pipe .st.now { background: var(--accent-bg); border-color: var(--accent); box-shadow: 0 0 26px rgba(255,122,89,.28); z-index: 1; }
-.pipe .st .v { font-family: var(--sans); }
-
-/* ---- stats ---- */
-.stat b { font-family: var(--sans); font-weight: 600; }
-
-/* ---- agent board ---- */
-.post {
-  background: rgba(255,255,255,.03); border: 1px solid var(--line-soft);
-  border-radius: 12px; backdrop-filter: blur(8px);
+/* ---- status strip ---- */
+.pipe { gap: 10px; }
+.pipe .st {
+  background: var(--panel); border: 1px solid var(--line) !important;
+  border-radius: 12px !important; backdrop-filter: none;
+  padding: 14px 16px;
 }
-.post.guide { background: var(--accent-bg); border-color: rgba(255,122,89,.42); }
+.pipe .st.now { background: #1d1a20; border-color: var(--accent) !important; box-shadow: none; margin-right: 0; }
+.pipe .st .n { font-size: 12.5px; color: var(--muted); letter-spacing: 0; }
+.pipe .st .v { font-family: var(--sans); font-size: 26px; font-weight: 600; }
+.pipe .st .s { font-size: 12px; color: var(--faint); }
+.pipe .st.now .n, .pipe .st.now .v { color: var(--accent); }
 
-/* ---- niches / leads ---- */
+/* ---- the Guide: the one card that says what to do next ---- */
+.post { background: var(--sunk); border: 1px solid var(--line); border-radius: 10px; backdrop-filter: none; }
+.post.guide { background: #1d1a20; border-color: rgba(255,122,89,.4); padding: 18px 20px; }
+.post .msg b { font-size: 17px; font-weight: 600; display: block; margin-bottom: 4px; }
+.post .msg .sub { font-size: 14px; color: var(--muted); line-height: 1.55; }
+.post .cta { margin-top: 14px; }
+.post .cta button { font-size: 15px; }
+
+/* ---- niches / results ---- */
 .niche {
   background: var(--panel); border: 1px solid var(--line);
-  border-radius: var(--radius); backdrop-filter: blur(14px);
-  transition: border-color .3s ease, box-shadow .3s ease, transform .3s ease;
+  border-radius: 12px; backdrop-filter: none;
+  transition: border-color .2s ease;
 }
-.niche:hover { border-color: rgba(255,122,89,.45); box-shadow: 0 10px 34px rgba(0,0,0,.42); transform: translateY(-2px); }
-.niche .conf.high { background: var(--accent-bg); color: var(--accent); box-shadow: 0 0 12px rgba(255,122,89,.4); }
+.niche:hover { border-color: rgba(255,122,89,.45); box-shadow: none; transform: none; }
+.niche .conf.high { background: var(--accent-bg); color: var(--accent); box-shadow: none; }
 .wtp { background: var(--accent-bg); color: var(--accent); }
 
 /* ---- knowledge / chips / trend ---- */
@@ -709,37 +722,59 @@ header { padding-top: 0; }
 
 /* ---- Malwarebytes-style fixed dashboard: no page scroll, 2-col card grid ---- */
 body { height: 100vh; overflow: hidden; }
+/* ---- shell ----
+   One screen. The header and status strip are pinned; the cards below them are
+   the only thing that can ever move. Content is never clipped: if a card is
+   somehow taller than the space, the deck scrolls rather than cutting it off —
+   the old `overflow:hidden` made expanded panels unreachable past the bottom
+   edge. */
 .wrap {
   max-width: none !important;
   margin: 0 !important;
+  height: 100vh;
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   grid-auto-rows: min-content;
-  gap: 12px;
-  padding: 4px 22px 20px;
+  align-content: start;
+  gap: 14px;
+  padding: 6px 26px 26px;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 body.with-rail .wrap { margin-left: 232px !important; }
 body:not(.with-rail) .wrap { padding-top: 0 !important; }
 #rail.hidden ~ .wrap { margin-left: 0 !important; }
-header { grid-column: 1 / -1; grid-row: 1; margin-bottom: 8px; }
-.pipe { margin: 12px 0 4px; }
-.panel { padding: 14px 16px; }
-.panel { margin-bottom: 0 !important; }
-/* Cards must not stretch to their tallest row-mate: a collapsed panel next to an
-   open one was rendering as a tall empty box. */
+header { grid-column: 1 / -1; margin-bottom: 6px; }
+.pipe { margin: 14px 0 4px; }
+.panel { padding: 18px 20px; margin-bottom: 0 !important; }
+/* A collapsed card must not be inflated to match its taller neighbour. */
 .wrap > * { align-self: start; }
-/* Full-width items; everything else auto-flows into the 2 columns in DOM order:
-   header · guide + knowledge · results · sources + corpus · output */
 #results, #setup, #keyPanel { grid-column: 1 / -1; }
-#results { max-height: calc(100vh - 210px); overflow-y: auto; }
-/* Every card is bounded and scrolls inside itself. The page itself must never
-   scroll: the header and status strip have to stay on screen at all times. */
-.wrap { max-height: 100vh; overflow: hidden; }
-#boardPanel, #knowledgePanel, #corpusPanel, #outputPanel { max-height: 240px; overflow-y: auto; }
-#sourcesPanel { max-height: 240px; overflow-y: auto; }
+
+/* Only one panel is ever open (see the accordion in initPanels), so a generous
+   ceiling here still leaves the deck fitting on one screen. */
+#results { max-height: calc(100vh - 230px); overflow-y: auto; }
+#boardPanel, #knowledgePanel, #corpusPanel, #outputPanel, #sourcesPanel {
+  max-height: calc(100vh - 260px); overflow-y: auto;
+}
 #niches, #kTopics { max-height: 220px; overflow-y: auto; }
-/* The sessions tab moves out of the header band entirely, so the title can sit
-   on the same left edge as every card below it. */
+
+/* ---- progressive disclosure ----
+   Before anything is set up, the machinery is noise: a new user should see the
+   title, where they are, and one card telling them what to do. The rest appears
+   as it becomes real. */
+body.first-run #knowledgePanel,
+body.first-run #sourcesPanel,
+body.first-run #corpusPanel,
+body.first-run #outputPanel { display: none; }
+body.first-run #boardPanel { grid-column: 1 / -1; }
+
+/* The setup flow and the key panel are full-height sheets that scroll inside
+   themselves, so a long list of niches can never run off the bottom of the
+   window the way it did before. */
+#setup, #keyPanel { max-height: calc(100vh - 40px); overflow-y: auto; }
+body.setting-up .wrap, body.keying .wrap { align-content: start; }
+
 #railToggle { top: auto; bottom: 22px; font-family: var(--sans); }
 #rail { top: 0; padding-top: 12px; }
 #detailToggle, #railClose { font-family: var(--sans); }
@@ -790,7 +825,7 @@ button { background: linear-gradient(135deg,#e2543a,#d92b52); }
 <div class="wrap">
   <header>
     <div class="titleRow">
-      <h1><svg class="mark" viewBox="0 0 24 24" width="21" height="21" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5.6" fill="none" stroke="currentColor" stroke-width="3"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg><span class="wordmark">earwise</span><span class="sub">finds unmet demand in public forums</span></h1>
+      <h1><span class="wordmark">earwise</span><span class="sub">finds unmet demand in public forums</span></h1>
       <button id="detailToggle">show details</button>
     </div>
     <div class="pipe" id="pipeline"></div>
@@ -841,14 +876,14 @@ button { background: linear-gradient(135deg,#e2543a,#d92b52); }
   <div id="setup" hidden>
     <div class="setupHead">
       <div>
-        <div class="setupTitle">new session</div>
-        <div class="setupSub">one niche per session — the vocabulary only accumulates inside one domain</div>
+        <div class="setupTitle">Who do you want to sell to?</div>
+        <div class="setupSub">One audience per project — keep dentists and electricians apart, or the results turn to mush.</div>
       </div>
       <button id="setupCancel" class="ghost">cancel</button>
     </div>
 
   <div class="panel" id="targetPanel">
-    <h2>target</h2>
+    <h2>who you serve</h2>
     <div class="field">
       <label for="niche">who do you serve? <span class="aside">— 1-3 words, or leave blank and hit auto</span></label>
       <div class="inputline"><span class="caret">&gt;</span>
@@ -856,17 +891,17 @@ button { background: linear-gradient(135deg,#e2543a,#d92b52); }
     </div>
     <div class="chips" id="chips"></div>
     <div class="row" id="planRow" style="margin-top:14px">
-      <div class="field"><button id="plan">find niches</button></div>
-      <div class="field"><button id="planAuto" class="ghost">auto — find where money flows</button></div>
+      <div class="field"><button id="plan">Show me niches</button></div>
+      <div class="field"><button id="planAuto" class="ghost">Or let earwise choose</button></div>
     </div>
     <div class="working" id="planWork"></div>
     <div class="row" style="margin-top:2px">
       <div class="field" id="skipRow" hidden>
-        <button id="skipNiche" class="ghost">skip — name it myself</button>
+        <button id="skipNiche" class="ghost">I already know my niche</button>
       </div>
     </div>
     <div class="hint" id="planHint">
-      a model's prior on where budget sits — a starting point for aiming the collector, not measured demand
+      These are educated guesses about where money is, not measured demand — a starting point for aiming earwise.
     </div>
     <div id="trace"></div>
     <div id="niches"></div>
@@ -1654,6 +1689,14 @@ function fold(id, collapsed) {
   if (f) f.textContent = collapsed ? '+' : '−';
 }
 
+/** Open one panel and close the rest. Several open panels at once was what
+ *  pushed content past the bottom of the window, where it could not be reached. */
+function openOnly(id) {
+  for (const other of PANELS) fold(other, other !== id);
+  const p = $(id);
+  if (p) p.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
 function setPeek(id, text) {
   const h = $(id) && $(id).querySelector('h2 .peek');
   if (h) h.textContent = text || '';
@@ -1666,7 +1709,11 @@ function initPanels() {
     const h = p.querySelector('h2');
     if (!h || h.querySelector('.fold')) continue;
     h.insertAdjacentHTML('beforeend', '<span class="fold">−</span><span class="peek"></span>');
-    h.onclick = () => fold(id, !p.classList.contains('collapsed'));
+    h.title = 'click to open';
+    h.onclick = () => {
+      const wasOpen = !p.classList.contains('collapsed');
+      if (wasOpen) fold(id, true); else openOnly(id);
+    };
   }
   // Fold every secondary panel by default — one screen, no wall of empty boxes.
   // The Guide (boardPanel) stays open: it is the one card that says what to do
@@ -1715,14 +1762,19 @@ function renderPipeline(st) {
     if (!el) return;
     // Choosing who you serve happens in the setup flow, not in a folded panel.
     if (el.dataset.open === 'setup') { openSetup(); return; }
-    fold(el.dataset.open, false);
-    $(el.dataset.open).scrollIntoView({ behavior: 'smooth', block: 'center' });
+    openOnly(el.dataset.open);
   };
 
   // Panels stay folded. The pipeline strip above already says where you are, and
   // every folded header carries its own peek number — so state refreshes must not
   // re-open anything. Opening a panel is the user's decision (click a stage), not
   // something the app does under them on every poll.
+  // Before there is anything to look at, hide the machinery. A first-time user
+  // gets the title, where they are, and one card telling them what to do — not
+  // four empty boxes about corpora and vocabularies.
+  document.body.classList.toggle('first-run',
+    !st.configuredSources && !(c.posts || 0) && !(k.postsKnown || 0));
+
   // A folded panel must say what is INSIDE it, not just assert a zero. "0 read ·
   // 0 recurring" teaches nothing and gives no reason to open it.
   setPeek('targetPanel', `${st.configuredSources || 0} sources`);
