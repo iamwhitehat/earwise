@@ -98,10 +98,10 @@ function createTray() {
 
 async function openWindow() {
   win = new BrowserWindow({
-    width: 1320,
-    height: 880,
+    width: 1304,
+    height: 620,
     minWidth: 960,
-    minHeight: 640,
+    minHeight: 560,
     title: 'earwise',
     backgroundColor: '#00000000',
     backgroundMaterial: 'mica',

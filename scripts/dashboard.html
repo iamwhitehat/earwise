@@ -723,15 +723,21 @@ body { height: 100vh; overflow: hidden; }
 body.with-rail .wrap { margin-left: 232px !important; }
 body:not(.with-rail) .wrap { padding-top: 0 !important; }
 #rail.hidden ~ .wrap { margin-left: 0 !important; }
-header { grid-column: 1 / -1; margin-bottom: 8px; }
+header { grid-column: 1 / -1; grid-row: 1; margin-bottom: 8px; }
 .pipe { margin: 12px 0 4px; }
 .panel { padding: 14px 16px; }
 .panel { margin-bottom: 0 !important; }
+/* Full-width items; everything else auto-flows into the 2 columns in DOM order:
+   header · guide + knowledge · results · sources + corpus · output */
+#results, #setup, #keyPanel { grid-column: 1 / -1; }
+#results { max-height: 340px; overflow-y: auto; }
 #boardPanel, #knowledgePanel, #corpusPanel, #outputPanel { max-height: 260px; overflow-y: auto; }
-#results { grid-column: 1 / -1; max-height: 360px; overflow-y: auto; }
 #niches, #kTopics { max-height: 220px; overflow-y: auto; }
+/* The floating sessions tab is fixed at the top-left; give the title room so it
+   never sits on top of the wordmark when the rail is hidden. */
+#railToggle { top: 10px; }
+body:not(.with-rail) .titleRow { padding-left: 108px; }
 #rail { top: 0; padding-top: 12px; }
-#railToggle { top: 12px; }
 </style>
 </head>
 <body class="with-rail">
@@ -1607,7 +1613,7 @@ $('newSesh').onclick = () => openSetup();
 // ---- panel folding ----
 // Seven open panels is a wall. Each keeps a one-line peek of its key number so
 // a folded panel still tells you something.
-const PANELS = ['sourcesPanel', 'corpusPanel', 'knowledgePanel', 'outputPanel'];
+const PANELS = ['sourcesPanel', 'corpusPanel', 'knowledgePanel', 'outputPanel', 'boardPanel'];
 
 function fold(id, collapsed) {
   const p = $(id);
@@ -1631,6 +1637,10 @@ function initPanels() {
     h.insertAdjacentHTML('beforeend', '<span class="fold">−</span><span class="peek"></span>');
     h.onclick = () => fold(id, !p.classList.contains('collapsed'));
   }
+  // Fold every secondary panel by default — one screen, no wall of empty boxes.
+  // The Guide (boardPanel) stays open: it is the one card that says what to do
+  // next. The folded headers keep their peek number, so nothing is lost.
+  for (const id of PANELS) fold(id, id !== 'boardPanel');
 }
 
 /** The four stages, and which one you are actually on. Clicking opens it. */
@@ -1669,15 +1679,10 @@ function renderPipeline(st) {
     $(el.dataset.open).scrollIntoView({ behavior: 'smooth', block: 'center' });
   };
 
-  // Fold everything except the stage you are on, so the page opens on the one
-  // decision that matters right now.
-  const keep = stages[nowIdx === -1 ? stages.length - 1 : nowIdx].id;
-  for (const id of PANELS) {
-    if (id === 'outputPanel' || id === 'knowledgePanel') continue;
-    fold(id, id !== keep);
-  }
-
-  fold('knowledgePanel', (k.postsKnown || 0) === 0);
+  // Panels stay folded. The pipeline strip above already says where you are, and
+  // every folded header carries its own peek number — so state refreshes must not
+  // re-open anything. Opening a panel is the user's decision (click a stage), not
+  // something the app does under them on every poll.
   setPeek('targetPanel', `${st.configuredSources || 0} sources`);
   setPeek('sourcesPanel', `${c.posts || 0} posts collected`);
   setPeek('corpusPanel', c.posts ? `${c.pending || 0} pending of ${c.posts}` : 'empty');
