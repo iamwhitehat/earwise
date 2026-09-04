@@ -348,13 +348,11 @@
   .setupTitle { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
   .setupSub { font-size: 12.5px; color: var(--muted); margin-top: 3px; }
   #keyPanel[hidden] { display: none; }
-  body.keying .pipe,
   body.keying #results,
   body.keying #knowledgePanel,
   body.keying #sourcesPanel,
   body.keying #corpusPanel,
-  body.keying #outputPanel,
-  body.keying #boardPanel { display: none; }
+  body.keying #outputPanel { display: none; }
   body.setting-up #keyPanel { display: none; }
 
   body.setting-up .pipe,
@@ -548,9 +546,9 @@
 /* ============ EARWISE · AURORA THEME — utopian / futuristic ============ */
 :root {
   --bg:        #05060d;
-  --panel:     rgba(255,255,255,0.045);
+  --panel:     rgba(255,255,255,0.07);
   --sunk:      rgba(255,255,255,0.035);
-  --line:      rgba(255,255,255,0.10);
+  --line:      rgba(255,255,255,0.14);
   --line-soft: rgba(255,255,255,0.065);
   --ink:       #eaeef7;
   --muted:     #97a0bd;
@@ -577,9 +575,9 @@ body {
 }
 
 /* ---- aurora background layers ---- */
-#stars { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+#stars { position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: .5; }
 .aurora { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; filter: blur(90px) saturate(130%); }
-.aurora i { position: absolute; border-radius: 50%; opacity: .55; mix-blend-mode: screen; }
+.aurora i { position: absolute; border-radius: 50%; opacity: .28; mix-blend-mode: screen; }
 .aurora i:nth-child(1){ width:56vw;height:56vw;left:-16vw;top:-22vw;background:radial-gradient(circle,rgba(167,139,250,.6),transparent 66%);animation:drift1 27s ease-in-out infinite; }
 .aurora i:nth-child(2){ width:50vw;height:50vw;right:-13vw;top:-10vw;background:radial-gradient(circle,rgba(34,211,238,.45),transparent 66%);animation:drift2 34s ease-in-out infinite; }
 .aurora i:nth-child(3){ width:48vw;height:48vw;left:18vw;bottom:-24vw;background:radial-gradient(circle,rgba(255,122,89,.48),transparent 66%);animation:drift3 40s ease-in-out infinite; }
@@ -727,24 +725,55 @@ header { grid-column: 1 / -1; grid-row: 1; margin-bottom: 8px; }
 .pipe { margin: 12px 0 4px; }
 .panel { padding: 14px 16px; }
 .panel { margin-bottom: 0 !important; }
+/* Cards must not stretch to their tallest row-mate: a collapsed panel next to an
+   open one was rendering as a tall empty box. */
+.wrap > * { align-self: start; }
 /* Full-width items; everything else auto-flows into the 2 columns in DOM order:
    header · guide + knowledge · results · sources + corpus · output */
 #results, #setup, #keyPanel { grid-column: 1 / -1; }
-#results { max-height: 340px; overflow-y: auto; }
-#boardPanel, #knowledgePanel, #corpusPanel, #outputPanel { max-height: 260px; overflow-y: auto; }
+#results { max-height: calc(100vh - 210px); overflow-y: auto; }
+/* Every card is bounded and scrolls inside itself. The page itself must never
+   scroll: the header and status strip have to stay on screen at all times. */
+.wrap { max-height: 100vh; overflow: hidden; }
+#boardPanel, #knowledgePanel, #corpusPanel, #outputPanel { max-height: 240px; overflow-y: auto; }
+#sourcesPanel { max-height: 240px; overflow-y: auto; }
 #niches, #kTopics { max-height: 220px; overflow-y: auto; }
-/* The floating sessions tab is fixed at the top-left; give the title room so it
-   never sits on top of the wordmark when the rail is hidden. */
-#railToggle { top: 10px; }
-body:not(.with-rail) .titleRow { padding-left: 108px; }
+/* The sessions tab moves out of the header band entirely, so the title can sit
+   on the same left edge as every card below it. */
+#railToggle { top: auto; bottom: 22px; font-family: var(--sans); }
 #rail { top: 0; padding-top: 12px; }
+#detailToggle, #railClose { font-family: var(--sans); }
+
+/* Titles read first; their peek number is subordinate. Was the other way round. */
+.panel > h2 { color: #b6bed6; }
+.panel > h2 .peek { color: var(--faint); font-family: var(--mono); }
+h1 .sub { color: var(--muted); }
+
+/* The active stage had border-right:0 from the legacy sheet, so its highlight
+   rendered as an open U. */
+.pipe .st.now { border-right: 1px solid var(--accent); margin-right: -1px; box-shadow: none; }
+.pipe .st.now .n::before { content: "◉ "; color: var(--accent); }
+
+/* Accent = current state + the one action. Nothing else. */
+.panel > h2::before, h2::before { color: var(--line); }
+h1 .wordmark { -webkit-text-fill-color: var(--ink); background: none; }
+button { background: linear-gradient(135deg,#e2543a,#d92b52); }
+
+/* The fold control has to look like a control. */
+.panel > h2 .fold {
+  color: var(--muted); font-size: 14px; line-height: 1;
+  width: 20px; height: 20px; display: inline-flex;
+  align-items: center; justify-content: center;
+  border: 1px solid var(--line-soft); border-radius: 6px;
+}
+.panel > h2:hover .fold { color: var(--accent); border-color: var(--accent); }
 </style>
 </head>
 <body class="with-rail">
 <canvas id="stars" aria-hidden="true"></canvas>
 <div class="aurora" aria-hidden="true"><i></i><i></i><i></i></div>
 <aside id="rail">
-  <div class="head"><h3>sessions</h3>
+  <div class="head"><h3>projects</h3>
     <button id="railClose" title="hide sessions">&laquo; hide</button></div>
   <button id="newSesh">+ new session</button>
   <div class="list" id="seshList"></div>
@@ -756,20 +785,20 @@ body:not(.with-rail) .titleRow { padding-left: 108px; }
     </div>
   </div>
 </aside>
-<button id="railToggle" title="show sessions"><span class="arrow">&raquo;</span><span>sessions</span></button>
+<button id="railToggle" title="show projects"><span class="arrow">&raquo;</span><span>projects</span></button>
 
 <div class="wrap">
   <header>
     <div class="titleRow">
-      <h1><svg class="mark" viewBox="0 0 24 24" width="21" height="21" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5.6" fill="none" stroke="currentColor" stroke-width="3"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg><span class="wordmark">earwise</span><span class="sub">demand scanner</span></h1>
+      <h1><svg class="mark" viewBox="0 0 24 24" width="21" height="21" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5.6" fill="none" stroke="currentColor" stroke-width="3"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg><span class="wordmark">earwise</span><span class="sub">finds unmet demand in public forums</span></h1>
       <button id="detailToggle">show details</button>
     </div>
     <div class="pipe" id="pipeline"></div>
   </header>
 
   <div class="panel" id="boardPanel">
-    <h2>agents at work</h2>
-    <div id="board"><div class="post guide" id="guidePost"><span class="who"><span class="ic">🧭</span>Guide</span><span class="msg">loading…</span></div></div>
+    <h2>what's happening now</h2>
+    <div id="board"><div class="post guide" id="guidePost"><span class="who"><span class="ic">◆</span>Guide</span><span class="msg">loading…</span></div></div>
   </div>
 
   <div class="panel" id="keyPanel" hidden>
@@ -800,7 +829,7 @@ body:not(.with-rail) .titleRow { padding-left: 108px; }
     <h2>what it has learned</h2>
     <div class="stats" id="kStats"></div>
     <div class="row" id="reviewRow" style="margin-top:16px">
-      <div class="field"><button id="review" class="ghost">review vocabulary</button></div>
+      <div class="field"><button id="review" class="ghost">merge duplicate problem names</button></div>
     </div>
     <div class="hint detail">merges labels that mean the same thing, and remembers the merge for every future run</div>
     <div id="kTrend"></div>
@@ -846,7 +875,7 @@ body:not(.with-rail) .titleRow { padding-left: 108px; }
   </div>
 
   <div class="panel" id="sourcesPanel">
-    <h2>sources</h2>
+    <h2>where it reads</h2>
     <div class="field">
       <label for="hn">hacker news <span class="aside">— comma separated</span></label>
       <div class="inputline"><span class="caret">&gt;</span>
@@ -864,19 +893,19 @@ body:not(.with-rail) .titleRow { padding-left: 108px; }
     </div>
     <div class="row" id="liveRow">
       <div class="field detail" style="max-width:190px;flex:0 0 190px">
-        <label for="min">min posts per topic</label>
+        <label for="min">ignore problems mentioned fewer than N times</label>
         <div class="inputline"><span class="caret">&gt;</span>
           <input type="number" id="min" value="2" min="1" max="20"></div>
       </div>
-      <div class="field"><button id="run">scan live sources</button></div>
-      <div class="field"><button id="toCollector" class="ghost">send to collector</button></div>
+      <div class="field"><button id="run">read these now</button></div>
+      <div class="field"><button id="toCollector" class="ghost">keep watching in the background</button></div>
     </div>
     <div id="collectorBox"></div>
 
   </div>
 
   <div class="panel" id="corpusPanel">
-    <h2>corpus</h2>
+    <h2>saved posts</h2>
     <div class="stats" id="corpusStats"></div>
     <div class="field" style="margin-top:16px;display:none">
       <label>only these subreddits <span class="aside">— none selected = all</span></label>
@@ -888,7 +917,7 @@ body:not(.with-rail) .titleRow { padding-left: 108px; }
         <div class="inputline"><span class="caret">&gt;</span>
           <input type="number" id="limit" value="600" min="50" max="5000" step="50"></div>
       </div>
-      <div class="field"><button id="runCorpus">scan corpus</button></div>
+      <div class="field"><button id="runCorpus">analyse what's been saved</button></div>
       <div class="field"><button id="getComments" class="ghost">fetch replies</button></div>
     </div>
     <div class="hint" id="corpusHint"></div>
@@ -896,7 +925,7 @@ body:not(.with-rail) .titleRow { padding-left: 108px; }
   </div>
 
   <div class="panel" id="outputPanel">
-    <h2>output</h2>
+    <h2>activity</h2>
     <div class="working" id="scanWork" style="margin:0 0 12px"></div>
     <div id="log"><span class="l">idle</span></div>
   </div>
@@ -1011,12 +1040,14 @@ function dlReport() { downloadText('demand-report.md', reportMarkdown()); }
 // voice; the board shows them posting as they work, and the Guide holds the top
 // slot saying the single most useful next action.
 
+// Mono glyphs, not emoji: at 15px the colour emoji render as muddy blobs and are
+// the only raster elements in an otherwise vector UI. These inherit the accent.
 const AGENTS = {
-  guide:      { ic: '🧭', n: 'Guide' },
-  scout:      { ic: '🕵️', n: 'Scout' },
-  analyst:    { ic: '🔬', n: 'Analyst' },
-  skeptic:    { ic: '⚖️', n: 'Skeptic' },
-  strategist: { ic: '🎯', n: 'Strategist' },
+  guide:      { ic: '◆', n: 'Guide' },
+  scout:      { ic: '◈', n: 'Scout' },
+  analyst:    { ic: '✳', n: 'Analyst' },
+  skeptic:    { ic: '⚖', n: 'Skeptic' },
+  strategist: { ic: '◎', n: 'Strategist' },
 };
 
 /** Attribute a log line to the agent that produced it. Heuristic but stable. */
@@ -1245,7 +1276,7 @@ function renderCorpus(c) {
   const el = $('corpusStats');
   if (!c || !c.posts) {
     el.innerHTML = '<div class="stat nil"><b>0</b><span>posts collected</span></div>';
-    $('corpusHint').textContent = 'run  npm run collect  to start accumulating — leave it running for days';
+    $('corpusHint').textContent = 'Nothing collected yet. Pick who you serve and earwise starts reading their forums — this fills up over hours, not seconds.';
     $('runCorpus').disabled = true;
     return;
   }
@@ -1649,32 +1680,41 @@ function renderPipeline(st) {
   const live = (st.health || []).filter((x) => x.configured);
   const ran = live.filter((x) => x.lastRunAt > 0).length;
 
+  // Plain English, and each card points at the place its job is actually done.
+  // 'target' used to open the sources form, where a niche cannot be chosen; and
+  // the last card was labelled 'read' while showing the count of posts NOT read.
   const stages = [
-    { id: 'sourcesPanel', n: 'target', v: st.configuredSources || 0,
-      s: st.configuredSources ? 'sources set' : 'pick a niche', ok: !!st.configuredSources },
+    { id: 'setup', n: 'who you serve', v: st.configuredSources || 0,
+      s: st.configuredSources ? 'sources set' : 'not chosen yet', ok: !!st.configuredSources },
     // Done only when a CURRENTLY configured source has actually fetched. A
     // corpus full of posts from an abandoned target is not this stage done.
-    { id: 'sourcesPanel', n: 'collect', v: c.posts || 0,
+    { id: 'sourcesPanel', n: 'posts found', v: c.posts || 0,
       s: ran ? `${ran}/${live.length} sources live`
-        : (st.collector && st.collector.running) ? 'collector running…' : 'not started for this target',
+        : (st.collector && st.collector.running) ? 'collector running…' : 'not started yet',
       ok: ran > 0 },
-    { id: 'knowledgePanel', n: 'classify', v: k.postsKnown || 0,
-      s: `${k.topicsKnown || 0} topics`, ok: (k.postsKnown || 0) > 0 },
-    { id: 'corpusPanel', n: 'read', v: c.pending || 0,
-      s: `pending · ${k.recurringTopics || 0} recurring topics`,
+    { id: 'knowledgePanel', n: 'problems named', v: k.postsKnown || 0,
+      s: `${k.topicsKnown || 0} problems named`, ok: (k.postsKnown || 0) > 0 },
+    { id: 'knowledgePanel', n: 'ready to score', v: k.recurringTopics || 0,
+      s: (k.recurringTopics || 0) > 0 ? 'problems that keep coming up'
+        : 'need repeats before scoring',
       ok: (c.pending || 0) === 0 && (k.recurringTopics || 0) > 0 },
   ];
   const nowIdx = stages.findIndex((x) => !x.ok);
 
   $('pipeline').innerHTML = stages.map((x, i) => {
     const cls = x.ok ? 'done' : i === nowIdx ? 'now' : 'todo';
-    return `<div class="st ${cls}" data-open="${x.id}">
-      <div class="n">${x.n}</div><div class="v">${x.v}</div><div class="s">${esc(x.s)}</div></div>`;
+    // A row of zeros reads as "broken". Before anything has run, an em-dash says
+    // "not yet" instead of asserting a measurement of nothing.
+    const v = x.v ? x.v : '—';
+    return `<div class="st ${cls}" data-open="${x.id}" title="click to open">
+      <div class="n">${x.n}</div><div class="v">${v}</div><div class="s">${esc(x.s)}</div></div>`;
   }).join('');
 
   $('pipeline').onclick = (e) => {
     const el = e.target.closest('.st');
     if (!el) return;
+    // Choosing who you serve happens in the setup flow, not in a folded panel.
+    if (el.dataset.open === 'setup') { openSetup(); return; }
     fold(el.dataset.open, false);
     $(el.dataset.open).scrollIntoView({ behavior: 'smooth', block: 'center' });
   };
@@ -1683,11 +1723,17 @@ function renderPipeline(st) {
   // every folded header carries its own peek number — so state refreshes must not
   // re-open anything. Opening a panel is the user's decision (click a stage), not
   // something the app does under them on every poll.
+  // A folded panel must say what is INSIDE it, not just assert a zero. "0 read ·
+  // 0 recurring" teaches nothing and gives no reason to open it.
   setPeek('targetPanel', `${st.configuredSources || 0} sources`);
-  setPeek('sourcesPanel', `${c.posts || 0} posts collected`);
-  setPeek('corpusPanel', c.posts ? `${c.pending || 0} pending of ${c.posts}` : 'empty');
-  setPeek('knowledgePanel',
-    `${k.postsKnown || 0} read · ${k.recurringTopics || 0} recurring`);
+  setPeek('sourcesPanel', st.configuredSources
+    ? `${c.posts || 0} posts found` : 'where it reads — not set up');
+  setPeek('corpusPanel', c.posts
+    ? `${c.pending || 0} not read yet, of ${c.posts}` : 'the posts it saved — none yet');
+  setPeek('knowledgePanel', (k.postsKnown || 0)
+    ? `${k.postsKnown} read · ${k.recurringTopics || 0} keep coming up`
+    : 'the problems it has found — nothing yet');
+  setPeek('outputPanel', st.scanning ? 'working…' : 'activity log');
 }
 
 /** The Guide holds the top board slot: one sentence + one button saying the
@@ -1704,12 +1750,18 @@ function renderGuide(st) {
 
   if (st.scanning) {
     title = 'Scanning…'; body = 'The agents are working — watch the feed below.';
-  } else if (!st.hasKey) {
-    title = 'Add your API key'; body = 'Nothing can classify without one.';
-    btn = ['Add key', openKey];
   } else if (!st.configuredSources) {
-    title = 'Pick a niche'; body = 'Choose who you want to find demand for — one niche per session.';
-    btn = ['Choose a niche', openSetup];
+    // Niche first, key second. Collecting is free and slow (Reddit allows one
+    // request a minute), so it should start straight away; the key is only
+    // needed later, to read what came back. Demanding credentials first wasted
+    // the user's first hour on the highest-friction possible step.
+    title = 'Pick who you want to sell to';
+    body = 'Name a trade or audience — like "dentists". earwise starts reading their forums right away, and that part is free.';
+    btn = ['Pick a niche', openSetup];
+  } else if (!st.hasKey) {
+    title = 'Add your API key';
+    body = 'Collecting is free; understanding what was collected costs a few cents. Paste a key to let earwise read it.';
+    btn = ['Add key', openKey];
   } else if (!(st.collector && st.collector.running) && !ran) {
     title = 'Start collecting'; body = `${st.configuredSources} sources are set but none has run yet.`;
     btn = ['Start collector', async () => {
@@ -1726,7 +1778,7 @@ function renderGuide(st) {
     btn = ['Scan corpus', () => $('runCorpus').click()];
   }
 
-  g.innerHTML = `<span class="who"><span class="ic">🧭</span>Guide</span>` +
+  g.innerHTML = `<span class="who"><span class="ic">◆</span>Guide</span>` +
     `<span class="msg"><b>${esc(title)}</b><div class="sub">${body}</div>` +
     (btn ? `<div class="cta"><button>${esc(btn[0])}</button></div>` : '') + `</span>`;
   if (btn) {
